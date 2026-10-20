@@ -1,0 +1,1 @@
+experiment,run_id,repetition,status,backend,nx,ny,lx,ly,steps,alpha,dt,case,mpi_ranks,omp_threads,total_cores,nodes,decomposition,exchange,py,px,elapsed_s,max_abs_error,hostname,compiler,mpi_library,build_type,git_commit,timestamp_utc

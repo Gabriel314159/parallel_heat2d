@@ -1,68 +1,45 @@
-# Prerequisites
-*.d
+# Out-of-source builds
+/build/
+/build-*/
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/compile_commands.json
+/CMakeUserPresets.json
 
-# Compiled Object files
-*.slo
-*.lo
+# Compiler and linker output
 *.o
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
 *.lib
-
-# Executables
+*.so
+*.so.*
+*.dylib
+*.dll
 *.exe
-*.out
-*.app
+*.pdb
+*.ilk
 
-# Build directories
-build/
-Build/
-build-*/
+# Large or temporary solver outputs
+/outputs/
+/tmp/
+/logs/
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+# Python environments and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
 
-# Temporary files
-*.tmp
-*.log
-*.bak
+# Local editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
 *.swp
+*.swo
 
-# vcpkg
-vcpkg_installed/
-
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
-.cache/
+# Small measured CSV files and selected figures under results/ are tracked.

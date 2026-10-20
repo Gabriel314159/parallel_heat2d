@@ -1,0 +1,4 @@
+# Dependencies for future Python checking and plotting tools.
+# The C++ solver and CMake scaffold do not require these packages.
+numpy
+matplotlib

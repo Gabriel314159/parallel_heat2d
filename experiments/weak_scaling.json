@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "weak_scaling",
+  "defaults": "../config/defaults.json",
+  "description": "Fixed local cells and threads per rank with fixed spatial spacing; the physical domain grows.",
+  "local_nx": 512,
+  "local_ny": 512,
+  "spacing": {"dx": 0.001, "dy": 0.001},
+  "problem": {"steps": 1000},
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 4, "process_grid": [1, 1]},
+    {"mpi_ranks": 4, "omp_threads": 4, "process_grid": [2, 2]},
+    {"mpi_ranks": 16, "omp_threads": 4, "process_grid": [4, 4]}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/weak_scaling", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/weak_scaling.csv"
+}

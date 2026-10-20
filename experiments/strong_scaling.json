@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "strong_scaling",
+  "defaults": "../config/defaults.json",
+  "description": "Fixed global grid and steps; MPI-only scaling before fixed-core hybrid comparisons.",
+  "problem": {"nx": 4096, "ny": 4096, "steps": 1000},
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 1},
+    {"mpi_ranks": 2, "omp_threads": 1},
+    {"mpi_ranks": 4, "omp_threads": 1},
+    {"mpi_ranks": 8, "omp_threads": 1},
+    {"mpi_ranks": 16, "omp_threads": 1}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/strong_scaling", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/strong_scaling.csv"
+}
