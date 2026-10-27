@@ -1,10 +1,10 @@
 # Configuration conventions
 
-These JSON files define the planned interface. No program reads them yet. The future Python runner will load them and invoke the C++ CLI. Individual JSON paths and runtime output paths are resolved as described below.
+The solvers take command-line flags: the CLI column below, also listed by `heat_serial --help`. The JSON files describe experiments: [scripts/check_correctness.py](../scripts/check_correctness.py) reads them now, and the planned benchmark runner will too. They merge the defaults with the experiment and run overrides, then pass the problem fields to the solver as flags. Individual JSON paths and runtime output paths are resolved as described below.
 
 ## Problem parameters
 
-| JSON field | Planned CLI | Meaning |
+| JSON field | CLI | Meaning |
 | --- | --- | --- |
 | `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of cells along x (columns) and y (rows). |
 | `problem.lx`, `problem.ly` | `--lx`, `--ly` | Physical domain dimensions. |
@@ -45,7 +45,9 @@ The top row of exported matrices corresponds to the cell row next to the top wal
 
 ## Execution parameters
 
-| JSON field | Planned setting | Meaning |
+These apply to the parallel solver, `heat_parallel`; `heat_serial` ignores them with a note.
+
+| JSON field | Setting | Meaning |
 | --- | --- | --- |
 | `execution.backend` | Executable selection | `serial` or `parallel`. |
 | `execution.mpi_ranks` | MPI launch option | Number of MPI ranks. |
@@ -54,16 +56,23 @@ The top row of exported matrices corresponds to the cell row next to the top wal
 | `execution.exchange` | `--exchange` | `blocking` or `overlap`. |
 | `execution.process_grid` | `--py`, `--px` | Optional `[py, px]`; `py*px` must equal the number of ranks. |
 
-`serial` requires one rank and one thread. MPI must be launched by the appropriate local or HPC launcher. An unspecified 2D process grid will be chosen using MPI topology utilities. Reject grids that would leave any rank with zero interior rows or columns. Handle local dimensions of one or two cells correctly, even when no strictly interior region remains for overlap.
+`serial` requires one rank and one thread. MPI must be launched by the appropriate local or HPC launcher. Without `--py`/`--px`, the 2D process grid is chosen with `MPI_Dims_create`, as square as possible, with more process columns than rows when `nx > ny`. Grids that would leave a rank with zero rows or columns are rejected. Local blocks of one or two cells are handled correctly, even when no strictly interior region remains for overlap.
 
 ## Output parameters
 
-- `output.directory`: relative to the repository working directory.
-- `output.write_field`: whether to write the final scalar field.
-- `output.snapshot_interval`: steps between snapshots; zero disables intermediate output.
-- Planned `--output PATH`: writes a selected final field. Create parent directories as needed.
+| JSON field | CLI | Meaning |
+| --- | --- | --- |
+| `output.directory` | (runner) | Folder for the run's files, relative to the repository working directory. |
+| `output.write_field` | `--output PATH` | Write the final field to PATH: `.csv` as text, `.npy` as binary. The run summary is written next to it with the extension `.json`. |
+| `output.snapshot_interval` | `--snapshot-interval N` | Write a snapshot every N steps; 0 disables snapshots. |
+| | `--snapshot-dir DIR` | Snapshot folder (default `outputs/snapshots`). |
+| | `--snapshot-coarsen K` | Store snapshots as K × K block averages (default 1, full size); K must divide `nx` and `ny`. |
 
-Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output. Field matrices are CSV files with `ny` rows and `nx` columns of interior cell values, excluding ghost cells and process halos. They contain numeric values only, with enough precision for double-precision round trips.
+Parent folders are created as needed. Field matrices have `ny` rows and `nx` columns of interior cell values, top row first, excluding ghost cells and process halos. CSV files contain numeric values only, with 17 significant digits, enough for double-precision round trips.
+
+A snapshot folder contains `meta.json` (the configuration and `dt`), `index.csv` (one line per snapshot: `step,time,mass,file`) and the fields as `field_NNNNNN.npy`, which `numpy.load` reads. The mass in `index.csv` is that of the full field, also when snapshots are coarsened. Snapshot writing is excluded from the solver-loop timing.
+
+Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output; for large previews, coarsen the snapshots.
 
 ## Defaults and overrides
 

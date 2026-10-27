@@ -22,6 +22,9 @@
 *.pdb
 *.ilk
 
+# Personal C++ learning exercises
+/playground/
+
 # Large or temporary solver outputs
 /outputs/
 /tmp/

@@ -239,7 +239,7 @@ $$
 
 We can then try different time step size to investigate the stability dynamics.
 
-Record the Péclet numbers for each run, $\mathrm{Pe} = UL/\kappa$, using a characteristic speed $U$ and length $L$, and the grid Péclet number $\mathrm{Pe}_{\text{grid}} = \max(u_{\max}\Delta x,\, v_{\max}\Delta y)/\kappa$. A large Péclet number means the transport by the advection dominates diffusion. When $\mathrm{Pe}_{\text{grid}}$ is well above 2, upwind numerical diffusion is comparable to or larger than the physical diffusion, and this means while we can keep the computation stable, it may become physically inaccurate already.
+Record the Péclet numbers for each run, $\mathrm{Pe} = UL/\kappa$, using a characteristic speed $U$ and length $L$ (the solvers use $U = \max(u_{\max}, v_{\max})$ and $L = \max(l_x, l_y)$), and the grid Péclet number $\mathrm{Pe}_{\text{grid}} = \max(u_{\max}\Delta x,\, v_{\max}\Delta y)/\kappa$. A large Péclet number means the transport by the advection dominates diffusion. When $\mathrm{Pe}_{\text{grid}}$ is well above 2, upwind numerical diffusion is comparable to or larger than the physical diffusion, and this means while we can keep the computation stable, it may become physically inaccurate already.
 
 This constraint is derived in the following way. As we use first-order upwind difference scheme for advection, we have numerical diffusion of roughly $\kappa_{num}\approx \frac{|u|\Delta x}{2}$, and similarly for $y$. Then, we have $\kappa_{num}/\kappa \approx \frac{|u|\Delta x}{2\kappa}$.
 

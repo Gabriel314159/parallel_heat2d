@@ -1,4 +1,4 @@
-# Dependencies for future Python checking and plotting tools.
-# The C++ solver and CMake scaffold do not require these packages.
-numpy
-matplotlib
+# Python packages for the plotting scripts (scripts/plot_field.py, scripts/animate_field.py).
+# The C++ solvers and scripts/check_correctness.py do not need them.
+numpy>=1.20
+matplotlib>=3.6

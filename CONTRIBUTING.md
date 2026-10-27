@@ -25,7 +25,14 @@ Keep numerical behavior consistent across implementations. Make one focused chan
 
 Run the implemented correctness checks relevant to the change. Record the command, environment and observed result. A matching serial and parallel output does not independently validate the shared numerical formula; retain analytical and invariant-based checks as well.
 
-No solver checks exist in the initial scaffold. Do not mark planned checks as passed until they have actually run.
+The checks that exist now:
+
+```bash
+cmake --build build && ctest --test-dir build --output-on-failure
+python3 scripts/check_correctness.py
+```
+
+`ctest` runs the C++ unit tests and the correctness checks, including the serial/parallel comparisons when `heat_parallel` is built. Do not mark planned checks as passed until they have actually run.
 
 ## Results and documentation
 

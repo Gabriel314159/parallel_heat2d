@@ -1,6 +1,6 @@
-# C++ sources to implement
+# C++ sources
 
-This directory intentionally contains no solver source files yet. The model, discretization and boundary rule are specified in `docs/design.md`.
+The shared components (`common/`), the serial solver (`serial/`) and the MPI + OpenMP solver (`parallel/`) are implemented and tested. The model, discretization and boundary rule are specified in `docs/design.md`. Unit tests are in `tests/` and run with `ctest --test-dir build`.
 
 | Directory | Contents |
 | --- | --- |
@@ -12,14 +12,14 @@ Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src`
 
 ## Shared components (`common/`)
 
-| Planned file | Responsibility |
+| File | Responsibility |
 | --- | --- |
-| `config.hpp`, `config.cpp` | CLI parsing, parameter validation and the global time step. Validates $\kappa > 0$, $\varepsilon \ge 0$, flow period $T > 0$, blob width $\sigma > 0$ and the case requirements. Computes $u_{\max}$, $v_{\max}$ from `velocity.hpp`, then $a$, $d$, and either $\Delta t = \mathrm{cfl}/(a+d)$ or checks an explicit `dt` against $\Delta t\,(a+d) \le 1$. Also computes $\mathrm{Pe}$ and $\mathrm{Pe}_{\text{grid}}$ for the run metadata. |
-| `grid.hpp` | A contiguous `std::vector<double>`, local dimensions, a halo of width `halo` on every side and a row/column indexing API. Also the two face-velocity arrays (see below). |
-| `velocity.hpp`, `velocity.cpp` | The double-gyre streamfunction $\psi(x,y,t)$, the analytic speed bounds $u_{\max}$, $v_{\max}$, and a routine that fills a local block's face velocities at time $t$ from global coordinates. |
+| `config.hpp`, `config.cpp` | CLI parsing, parameter validation and the global time step. Validates $\kappa > 0$, $\varepsilon \ge 0$, flow period $T > 0$, blob width $\sigma > 0$ and the case requirements. Computes $u_{\max}$, $v_{\max}$ from `velocity.hpp`, then $a$, $d$, and either $\Delta t = \mathrm{cfl}/(a+d)$ or checks an explicit `dt` against $\Delta t\,(a+d) \le 1$. Also computes $\mathrm{Pe}$ and $\mathrm{Pe}_{\text{grid}}$ for the run metadata, and holds the output options (`--output`, snapshots) and the `--help` text. |
+| `grid.hpp` | `Field`: a contiguous `std::vector<double>`, local dimensions, a halo of width `halo` on every side, `(i, j)` access and row pointers for the loops. `FaceVelocities`: the two face-velocity arrays (see below). `Block`: where a local block sits in the global grid and which of its sides are walls. |
+| `velocity.hpp`, `velocity.cpp` | The double-gyre streamfunction $\psi(x,y,t)$, the analytic speed bounds $u_{\max}$, $v_{\max}$, the per-face functions `face_velocity_east/north`, and `FlowField`, which fills a whole block's face velocities at time $t$ from global coordinates. |
 | `physics.hpp`, `physics.cpp` | Initial conditions (`pigment_drop` Gaussian, `constant`, `cosine_decay`), the no-flux wall ghost fill, the analytic `cosine_decay` reference (continuous and exact-discrete), and the local mass sum $\Delta x\,\Delta y\sum c_{i,j}$. |
 | `stencil.hpp` | An inline upwind flux update of one cell from its five cell values and its four face velocities; no communication or threading inside this function. |
-| `io.hpp`, `io.cpp` | Serial matrix export, run metadata ($\kappa$, $A$, $\varepsilon$, $T$, $\mathrm{Pe}$, $\mathrm{Pe}_{\text{grid}}$, mass error) and benchmark record formatting. |
+| `io.hpp`, `io.cpp` | Final fields as CSV or `.npy`, snapshot folders (`meta.json`, `index.csv`, `.npy` fields, optionally coarsened), and the run summary: a short report plus one `RESULT {json}` line with the parameters, `dt`, timing, mass error and Péclet numbers. |
 
 ### Stencil
 
@@ -31,7 +31,7 @@ c^{\,n+1}_{i,j} = c^{\,n}_{i,j}
 - \frac{\Delta t}{\Delta y}\big(G_n(i,j) - G_n(i+1,j)\big),
 $$
 
-where each face flux is the upwind advective flux minus the central diffusive flux, exactly as in `docs/design.md`. Write one helper per face direction, `flux_x(c_left, c_right, U)` and `flux_y(c_below, c_above, V)`, and call it with the same argument order from both cells that share the face. Then interior fluxes cancel bit-for-bit and the mass is conserved to rounding, in serial and across ranks.
+where each face flux is the upwind advective flux minus the central diffusive flux, exactly as in `docs/design.md`. One helper, `face_flux(c_minus, c_plus, vel, kappa_h)`, computes the flux through a face from the cell on its minus side (west or south) to the cell on its plus side (east or north), and both cells that share the face call it with the same arguments in the same order. Then interior fluxes cancel bit-for-bit and the mass is conserved to rounding, in serial and across ranks.
 
 The stencil replaces the old heat-only update with `rx` and `ry`. With $A = 0$ all face velocities are zero and the update reduces to the old five-point diffusion.
 
@@ -43,6 +43,8 @@ Face velocities are stored in arrays, not recomputed inside the stencil:
 - Each interior face is shared by two cells, so storing it evaluates $\psi$ (two `sin` calls per corner) once per face instead of twice, and keeps the stencil free of trigonometry.
 - If the flow is steady ($\varepsilon = 0$ or $A = 0$), fill the arrays once before the time loop. Otherwise refill them at the start of every step at the old time $t_n = n\,\Delta t$; this cost belongs to the timed loop.
 - Evaluate $\psi$ from **global** corner coordinates. Two ranks that share a face then compute the same value without communication.
+- `FlowField` uses that $\psi$ is separable, $\psi = A\,s_x(x,t)\,s_y(y)$ with $s_x = \sin(\pi f(X,t))$ and $s_y = \sin(\pi Y)$: it evaluates $s_x$ once per corner column per step and $s_y$ once per corner row, so a time-dependent refill costs $O(n_x + n_y)$ sines. The arithmetic is the same as in `face_velocity_east/north`, and the unit test checks that the two agree exactly.
+- Faces on a physical wall are set to exactly 0. Evaluating $\psi$ there gives about $10^{-16}$ instead, because $\sin(2\pi)$ is not exactly 0 in floating point.
 
 ### Invariants
 
@@ -59,9 +61,9 @@ Face velocities are stored in arrays, not recomputed inside the stencil:
 
 ## Serial solver (`serial/`)
 
-Planned files: `main.cpp`, `solver.hpp`, `solver.cpp`.
+Files: `main.cpp`, `solver.hpp`, `solver.cpp`. Run `heat_serial --help` for the options.
 
-The driver will parse parameters, allocate the full domain with its ghost layer and the two face-velocity arrays, initialize the interior, run a fixed number of time steps, optionally write the final field, and report solver time and the mass error.
+The driver parses parameters, allocates the full domain with its ghost layer and the two face-velocity arrays, initializes the interior, runs a fixed number of time steps, optionally writes the final field and snapshots, and reports solver time and the mass error.
 
 Each time step $n$, at time $t_n = n\,\Delta t$:
 
@@ -72,11 +74,13 @@ Each time step $n$, at time $t_n = n\,\Delta t$:
 
 The solver must not depend on MPI or OpenMP. Use the same problem, time step, number of steps and precision as the parallel versions.
 
-Timing covers the whole time-stepping loop, including the ghost fill and any per-step velocity evaluation. Allocation, initialization, file output and validation are separate phases. Compute the total mass $M$ before and after the loop, outside the timed region; with no-flux walls the relative change $\lvert M_{\text{end}} - M_0\rvert / \lvert M_0\rvert$ should be at rounding level. Do not infer correctness from a heatmap alone.
+Timing covers the whole time-stepping loop, including the ghost fill and any per-step velocity evaluation; snapshot writing is measured separately and excluded. Allocation, initialization, file output and validation are separate phases. The total mass $M$ is computed before and after the loop, outside the timed region; with no-flux walls its relative change (`mass_error`, see `docs/experiment_plan.md`) stays at rounding level, about $10^{-13}$ after tens of thousands of steps. Do not infer correctness from a heatmap alone.
 
 ## Parallel solver (`parallel/`)
 
-| Planned file | Responsibility |
+Run `heat_parallel --help` for the options. On every correctness case it reproduces the serial field bit for bit; `ctest` checks this (`correctness_parallel`).
+
+| File | Responsibility |
 | --- | --- |
 | `main.cpp` | MPI initialization, rank-aware errors, parameter handling, solver invocation and finalization. |
 | `solver.hpp`, `solver.cpp` | Time loop, physical-wall ghost fill, per-step velocity refill, OpenMP worksharing, strategy selection, timing and the mass reduction. |
@@ -105,7 +109,7 @@ At one or two cells per local dimension, the overlap interior may be empty. Use 
 
 ### Communication details
 
-Rows are contiguous. Columns need an explicit packing strategy or an MPI datatype. Pick and document one before comparing communication modes so the comparisons do not accidentally change unrelated factors.
+Rows are contiguous: they are sent straight from the field with an MPI vector datatype (`halo` rows of `nx` interior values). Columns are packed into contiguous buffers before sending and unpacked after receiving. Blocking and overlapping exchange use the same scheme, so comparing them changes only the timing of the messages. Only interior values are sent and only edge ghost cells are written; corner ghosts are never touched.
 
 For each MPI communicator used, determine neighbors and gather metadata with its own rank numbering, especially if Cartesian rank reordering is enabled.
 

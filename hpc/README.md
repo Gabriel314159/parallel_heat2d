@@ -13,6 +13,10 @@ This project has not yet been configured or measured on either machine. The assi
 
 Do not assume that a generic `mpiexec` command or scheduler header is valid on either platform. The supplied [job_template.sh](job_template.sh) has no scheduler-specific directives or module names. Add verified directives before submitting it.
 
+## Large single runs
+
+[big_run.sh](big_run.sh) runs one large case with snapshots, with `heat_serial` or with `heat_parallel` on `RANKS` × `THREADS` cores; its settings come from environment variables. Add the scheduler directives for the platform and set `LAUNCHER` (for example `srun`) before submitting it on a cluster. The README section "Larger runs on a bigger machine" lists grid sizes with their run times and snapshot sizes. Such runs are for looking at the dynamics; the timed measurements for the report follow the run sequence below.
+
 ## Run sequence after implementation
 
 1. Build in Release mode with the selected compiler and MPI environment.

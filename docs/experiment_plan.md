@@ -15,10 +15,10 @@ Test one rank, several ranks, multiple threads, non-divisible dimensions and ver
 With no-flux walls the total scalar $M = \Delta x\,\Delta y\sum c_{i,j}$ is conserved exactly by the flux-form scheme. For every correctness run, compute $M$ before and after the time loop and require
 
 $$
-\frac{\lvert M_{\text{end}} - M_0\rvert}{\lvert M_0\rvert} \le 10^{-12}.
+\frac{\lvert M_{\text{end}} - M_0\rvert}{\Delta x\,\Delta y\sum_{i,j}\lvert c^0_{i,j}\rvert} \le 10^{-12}.
 $$
 
-The `cosine_decay` mode has $M_0 = 0$; for it, check the absolute change $\lvert M_{\text{end}} - M_0\rvert$ against the same tolerance times $\Delta x\,\Delta y\sum\lvert c_{i,j}\rvert$ instead. A larger drift points to inconsistent face fluxes between neighbouring cells or ranks, a wrong ghost fill, or a velocity field that is not discretely divergence-free.
+For non-negative fields such as `pigment_drop` the denominator is $M_0$ itself, so this is the relative mass change; it stays meaningful for `cosine_decay`, where $M_0 = 0$. The solvers report this quantity as `mass_error`. A larger drift points to inconsistent face fluxes between neighbouring cells or ranks, a wrong ghost fill, or a velocity field that is not discretely divergence-free.
 
 ### Constant field
 
