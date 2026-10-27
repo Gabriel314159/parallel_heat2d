@@ -1,93 +1,185 @@
 # Design notes
 
-Status: planned design. The numerical and parallel implementations have not been written yet.
+The exact numerical and parallel implementations are not discussed here. Please refer to `experiment_plan.md` for details.
 
 ## Model
 
-Solve two-dimensional advection–diffusion of a passive scalar `c(x,y,t)`, for example pigment concentration, on the rectangle `[0,lx] x [0,ly]`:
+We aim to solve a two-dimensional advection–diffusion model of a passive scalar $c(x,y,t)$, for example pigment concentration, on the designated rectangular bound $[0,l_x] \times [0,l_y]$:
 
-```text
-dc/dt + div(u*c) = kappa * (d2c/dx2 + d2c/dy2)
-```
+$$
+\frac{\partial c}{\partial t}
++ \nabla \cdot (\mathbf{u}c)
+= \kappa \left(
+\frac{\partial^2 c}{\partial x^2}
++ \frac{\partial^2 c}{\partial y^2}
+\right)
+$$
 
-- `kappa > 0` is a constant diffusivity.
-- `u = (u, v)` is a **prescribed** velocity field. It is given as a function of position and time; it is not solved for. The scalar does not affect the flow.
-- The velocity is derived from a streamfunction `psi(x,y,t)` with `u = dpsi/dy` and `v = -dpsi/dx`, so it is divergence-free. Positive `v` points towards increasing `y`, which is upwards.
-- There is no source term.
+- $\kappa > 0$ is a constant diffusivity left to our choice and is prescribed in `defaults.json`.
+- $\mathbf{u} = (u, v)$ is a **prescribed** velocity field. It is given as a function of position and time. The scalar does not affect the flow. The velocity is derived from a streamfunction $\psi(x,y,t)$:
 
-With `u = 0` and Dirichlet walls the model reduces exactly to the heat equation with `kappa` as the thermal diffusivity. The heat-only cases (`heated_top`, `constant`, `sine_decay`) remain supported as this special case.
+  $$
+  u = \frac{\partial \psi}{\partial y},
+  \qquad
+  v = -\frac{\partial \psi}{\partial x}.
+  $$
 
-All implementations solve the same discrete problem.
+  It is therefore exactly divergence-free, or incompressible in the sense of fluid dynamics, because the mixed derivatives cancel:
+
+  $$
+  \nabla\cdot\mathbf{u}
+  = \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y}
+  = \frac{\partial^2 \psi}{\partial x\,\partial y} - \frac{\partial^2 \psi}{\partial y\,\partial x}
+  = 0.
+  $$
+
+- The EXACT flow of the model is the time-periodic double gyre, a standard test flow for chaotic mixing. With $X = 2x/l_x$, $Y = y/l_y$, we define
+
+  $$
+  \psi(x,y,t) = A\,\sin\!\big(\pi f(X,t)\big)\,\sin(\pi Y),\\
+$$
+$$
+  f(X,t) = X+\varepsilon\sin(\omega t)\,(X^2 -2X)
+  $$
+
+  The amplitude $A$ sets the flow speed, $\varepsilon$ the oscillation strength, and $\varepsilon = 0$ gives the steady double gyre, namely $f(X,t)=X$.
+  Here, two counter-rotating gyres fill the box, and for $\varepsilon>0$ the dividing line between them oscillates left and right with period $2\pi/\omega$, which stretches and folds the scalar.  Since $f(0,t)=0$ and $f(2,t)=2$ for all $t$, $\psi = 0$ on all four walls, so the box is a closed container. 
+- Because $\nabla\cdot\mathbf{u} = 0$, the advection term can be written as $\nabla\cdot(\mathbf{u}c) = \mathbf{u}\cdot\nabla c$. The discrete scheme below keeps the flux form so that the total amount of scalar is conserved exactly. This also enables us to design a correctness check for parallel computing in terms of volume preservation through time.
+- There is no source term, to keep the problem simple.
+
+With $A = 0$ the flow vanishes ($\mathbf{u} = 0$) and, with Dirichlet walls, the model reduces exactly to the heat equation with $\kappa$ as the thermal diffusivity. This special case provides an analytical reference.
+
+All implementations solve the same discrete problem above.
 
 ## Grid and indexing
 
-Use a cell-centred finite-volume grid. Each grid value is the average of `c` over one cell, and the physical walls lie on cell faces.
+We use a cell-centred finite-volume grid. Each grid value is the average of $c$ over one cell, and the physical walls lie on cell faces.
 
-- `nx`: global cells along x (columns); `ny`: global cells along y (rows).
-- `dx = lx/nx`, `dy = ly/ny`.
-- Grid access uses `(row, column)`; top-down row ordering is used in field files.
-- For global row `i=1..ny`, the cell centre is `y = ly-(i-0.5)*dy`; for column `j=1..nx`, it is `x = (j-0.5)*dx`.
-- Row `i=0`, row `i=ny+1`, column `j=0` and column `j=nx+1` are ghost cells outside the walls. The top wall is the face between rows 0 and 1, at `y = ly`.
-- The east face of cell `(i,j)` is at `x = j*dx`. The north face of cell `(i,j)` is at `y = ly-(i-1)*dy`.
+- $n_x$: global cells along $x$ (columns); $n_y$: global cells along $y$ (rows).
+- Step size $\Delta x = l_x/n_x$, $\Delta y = l_y/n_y$.
+- Grid access uses $(i, j)$ = (row, column); top-down row ordering is used in field files.
+- For global row $i=1,\dots,n_y$, the cell centre is $y = l_y-(i-\tfrac12)\Delta y$; for column $j=1,\dots,n_x$, it is $x = (j-\tfrac12)\Delta x$.
+- Row $i=0$, row $i=n_y+1$, column $j=0$ and column $j=n_x+1$ are ghost cells outside the walls. The top wall is the face between rows 0 and 1, at $y = l_y$.
+- The east face of cell $(i,j)$ is at $x = j\,\Delta x$. The north face of cell $(i,j)$ is at $y = l_y-(i-1)\Delta y$.
 
-The five-point update never reads a corner ghost cell, so corner values need no convention. This replaces the earlier node-based grid with `dx = lx/(nx+1)` and its corner rule.
+The five-point update never reads a corner ghost cell, so corner values need no convention. This replaces the earlier node-based grid with $\Delta x = l_x/(n_x+1)$ and its corner rule.
 
 ## Velocity on faces
 
-Store or evaluate one normal velocity per cell face, computed from `psi` at the face's two end points (cell corners):
+Store or evaluate one normal velocity $(u,v)=(\frac{\partial\psi}{\partial y},\frac{\partial\psi}{\partial x})$ per cell face, computed from $\psi$ at the face's two end points (cell corners):
 
-```text
-U_e(i,j) = ( psi(j*dx, ly-(i-1)*dy) - psi(j*dx, ly-i*dy) ) / dy          east face, positive = +x
-V_n(i,j) = -( psi(j*dx, ly-(i-1)*dy) - psi((j-1)*dx, ly-(i-1)*dy) ) / dx  north face, positive = +y
-```
+on east face, we compute,
+$$
+U_e(i,j) = \frac{\psi\big(j\Delta x,\; l_y-(i-1)\Delta y\big) - \psi\big(j\Delta x,\; l_y-i\Delta y\big)}{\Delta y}
+$$
 
-The west and south faces of a cell are the east face of `(i,j-1)` and the north face of `(i+1,j)`. With this construction the discrete divergence of every cell is exactly zero, apart from rounding: the four corner values cancel. Evaluate `psi` from global coordinates so that every decomposition, and both ranks sharing a face, obtain the same face velocity without communication.
+on thenorth face, we compute,
+$$
+V_n(i,j) = -\,\frac{\psi\big(j\Delta x,\; l_y-(i-1)\Delta y\big) - \psi\big((j-1)\Delta x,\; l_y-(i-1)\Delta y\big)}{\Delta x}
+$$
 
-For a closed container the streamfunction is zero on all four walls, so every wall-face velocity is zero and no scalar crosses a wall by advection.
+The west and south faces of a cell are the east face of $(i,j-1)$ and the north face of $(i+1,j)$. With this construction the discrete divergence of every cell is exactly zero. We prove this in the following.
+$$
+(\nabla\cdot\mathbf u)_{i,j}
+\approx
+\frac{U_e-U_w}{\Delta x}
++
+\frac{V_n-V_s}{\Delta y}
+=\frac{1}{\Delta x \Delta y}[\psi_{NE}-\psi_{SE}
+$$
+$$
+-\psi_{NW}+\psi_{SW}-\psi_{NE}+\psi_{NW}+\psi_{SE}-\psi_{SW}]=0
+$$
+For a closed container the streamfunction is zero on all four walls.
 
-### Planned flows
+### Speed bounds
 
-| `flow` | Streamfunction | Speed bounds | Walls |
-| --- | --- | --- | --- |
-| `none` | `psi = 0` | 0 | any |
-| `uniform` | `psi = U0*y - V0*x` | `|u| <= |U0|`, `|v| <= |V0|` | Dirichlet only; for short runs where the scalar stays away from the walls |
-| `rotation` | `psi = -(omega/2)*((x-xc)^2 + (y-yc)^2)` | `|u| <= |omega|*ly/2`, `|v| <= |omega|*lx/2` for a centred axis | Dirichlet only; scalar must stay inside the inscribed circle |
-| `cellular` | `psi = A*sin(m*pi*x/lx)*sin(n*pi*y/ly)` | `|u| <= |A|*n*pi/ly`, `|v| <= |A|*m*pi/lx` | closed container |
-| `double_gyre` | `psi = A*sin(pi*f(X,t))*sin(pi*Y)` with `X = 2x/lx`, `Y = y/ly`, `f = eps*sin(w*t)*X^2 + (1-2*eps*sin(w*t))*X` | `|u| <= |A|*pi/ly`, `|v| <= 2*|A|*pi*(1+2*eps)/lx` | closed container |
+For the double gyre the velocity components satisfy, for all $t$,
 
-`rotation` with positive `omega` turns counterclockwise. `cellular` with `m = n = 1` is a single vortex filling the box; larger `m`, `n` give a grid of counter-rotating cells. `double_gyre` is time-periodic and produces chaotic mixing; `eps = 0` makes it steady.
+$$
+\lvert u\rvert \le u_{\max} = \frac{\lvert A\rvert\pi}{l_y},
+\qquad
+\lvert v\rvert \le v_{\max} = \frac{2\lvert A\rvert\pi\,(1+2\varepsilon)}{l_x}.
+$$
 
-Each face velocity is a difference quotient of `psi`, so it is bounded by the maximum of the corresponding continuous velocity component. The bounds above are therefore valid bounds for the discrete face velocities and can be used in the time-step rule.
+Each face velocity is a difference quotient of $\psi$, so it is bounded by the maximum of the corresponding continuous velocity component. 
+
+We can derive the bounds in the following. While $X=2x/l_x, \, Y=y/l_y$, for horizontal velocity, using $u=\partial \psi/ \partial y$, we have
+
+$$u=\frac{A\pi}{l_y}\sin(\pi f)\cos(\pi Y)\leq \frac{|A|\pi}{l_y}
+$$
+
+For vertical velocity, using $v=-\partial \psi/\partial x$, we have 
+
+$$v=-\frac{2A\pi}{l_x}\cos(\pi f)\sin(\pi Y)\frac{\partial f}{\partial X}\leq \frac{2|A|\pi(1+2\varepsilon)}{l_x}
+$$
 
 ## Discretization
 
-Write the update in conservative form. For each face, compute one total flux, advective plus diffusive, using first-order upwinding for advection and a central difference for diffusion:
+Write the update in conservative form. For each face, compute one total flux, advective plus diffusive $F_{\text{total}}=F_{\text{advection}}+F_{\text{diffusion}}$, using first-order upwinding for advection and a central difference for diffusion:
 
-```text
-F_e(i,j) = U_e * (U_e > 0 ? c(i,j) : c(i,j+1))  -  kappa * (c(i,j+1) - c(i,j)) / dx
-G_n(i,j) = V_n * (V_n > 0 ? c(i,j) : c(i-1,j))  -  kappa * (c(i-1,j) - c(i,j)) / dy
+$$
+F_e(i,j) = U_e \cdot \begin{cases} c_{i,j} & U_e > 0 \\ c_{i,j+1} & \text{otherwise} \end{cases}
+\;-\; \kappa\,\frac{c_{i,j+1} - c_{i,j}}{\Delta x}
+$$
 
-c_new(i,j) = c(i,j) - dt/dx * (F_e(i,j) - F_e(i,j-1)) - dt/dy * (G_n(i,j) - G_n(i+1,j))
-```
+$$
+G_n(i,j) = V_n \cdot \begin{cases} c_{i,j} & V_n > 0 \\ c_{i-1,j} & \text{otherwise} \end{cases}
+\;-\; \kappa\,\frac{c_{i-1,j} - c_{i,j}}{\Delta y}
+$$
 
-The north neighbour of `(i,j)` is row `i-1`, because rows are numbered top-down.
+$$
+\begin{align*}
+c^{\,n+1}_{i,j} &= c^{\,n}_{i,j}
+- \frac{\Delta t}{\Delta x}\big(F_e(i,j) 
+- F_e(i,j-1)\big)\\
+&- \frac{\Delta t}{\Delta y}\big(G_n(i,j) - G_n(i+1,j)\big)
+\end{align*}
+$$
 
-Use forward Euler in time. The flow is evaluated at the old time level `t_n` for time-dependent flows.
 
-Every face flux must be computed by the same expression, with the same operand order, in both cells that share the face, including cells on different ranks. Interior face fluxes then cancel when summed, and the total amount of scalar is conserved up to rounding.
+Use forward Euler in time. The flow is evaluated at the old time level $t_n$ for time-dependent flows.
 
-Upwinding is stable and non-oscillatory but adds numerical diffusion of roughly `|u|*dx/2` in x and `|v|*dy/2` in y. The leading spatial error is therefore first order in `dx` and `dy`; it is small compared with the physical diffusion only when the grid Péclet number is small. Higher-order advection schemes would need a two-cell halo and are outside the initial scope.
+$$c^{n+1}=c^n+\Delta t\,\, \mathcal{L}(c^n, t_n)$$
+
+Every face flux must be computed by the same expression, with the same operand order, in both cells that share the face, including cells on different ranks. 
+
+Upwinding is stable and non-oscillatory but adds numerical diffusion of roughly $\lvert u\rvert\Delta x/2$ in $x$ and $\lvert v\rvert\Delta y/2$ in $y$. The leading spatial error is therefore first order in $\Delta x$ and $\Delta y$. Here is a detailed breakdown of the overall introduced error from the advection computation as well as other possible sources.
+
+As we use first-order upwinding difference for advection term, we have 
+
+$$\frac{\partial c}{\partial x}\approx \frac{c_{i,j}-c_{i, j-1}}{\Delta x}$$
+
+where using a Taylor expansion, 
+$$
+\begin{align*}
+\frac{c(x)-c(x-\Delta x)}{\Delta x}
+&=\frac{c(x)-(c(x)-\Delta x c_x + c_{xx}\Delta x^2/2 +O(\Delta x^3))}{\Delta x}\\
+&=c_x-\frac{\Delta x}{2}c_{xx}+O(\Delta x^2)
+\end{align*}
+$$
+The leading spatial discretization error term here is $-\frac{\Delta x}{2}c_{xx}\approx O(\Delta x)$. For our two-dimensional case, this would introduce $O(\Delta x)+O(\Delta y)$.
+
+Now, consider the diffusion, as we employ another discretization scheme, the central difference, we have 
+
+$$
+c_{xx}\approx
+\frac{c_{i,j+1}-2c_{i,j}+c_{i,j-1}}{\Delta x^2}
+$$
+
+giving an error of $O(\Delta x^2)$, and a total error term of $O(\Delta x^2)+O(\Delta y^2)$ in two dimensions. 
+
+Finally, we have the error introduced from the time integration, giving $O(\Delta t)$. Indeed, we can reduce this amount of error by introducing a higher-order discretization scheme, however, that would require higher computational capacity and is thus left to our future study if possible. 
 
 ## Boundary conditions
 
-Each run uses one wall type for all four walls, set by `boundary_type`.
+Each run adopts the following rule for all four walls.
 
-- `dirichlet`: a prescribed wall value `g` per wall (`top`, `bottom`, `left`, `right`). Before each step, set every ghost cell to `2*g - c_adjacent`, so that the average of the ghost and its adjacent interior cell equals `g` on the wall face.
-- `noflux`: no scalar crosses a wall. Before each step, set every ghost cell to the value of its adjacent interior cell, `c_ghost = c_adjacent`. With zero wall-face velocity, both the advective and diffusive wall fluxes are then zero.
+`noflux`: no scalar crosses a wall. Before each step, set every ghost cell to the value of its adjacent interior cell, $c_{\text{ghost}} = c_{\text{adjacent}}$, so $F_{wall}^{diff}=-\kappa \frac{c_i-c_g}{\Delta x}=0$. With zero wall velocity, we have $F_{wall}^{adv}=0$. Togher, the total wall flux is zero.
 
-Ghost cells on physical walls now depend on the current interior values. They must be **refilled at the start of every step**, not only at initialization. Every implementation uses the same rule.
+As ghost cells on physical walls now depend on the current interior values. They must be **refilled at the start of every step**, not only at initialization. 
 
-`noflux` requires a closed-container flow (`none`, `cellular` or `double_gyre`). `uniform` and `rotation` require `dirichlet`, with wall values equal to the background value so that inflowing fluid carries the background value.
+Note that we don't actually need to take care of the four corner ghost cells as they are not involved in any step of the computation.
 
 ## Initial conditions
 
@@ -95,39 +187,43 @@ Initialize interiors from cell-centre global coordinates so that a change in dec
 
 | `case` | Initial field | Notes |
 | --- | --- | --- |
-| `heated_top` | `c0` everywhere | Heat-only demonstration: `flow = none`, Dirichlet walls with a hot top. |
-| `constant` | `c0` everywhere | All Dirichlet wall values equal `c0`, or `noflux`. Valid with any flow. |
-| `sine_decay` | `A*sin(pi*x/lx)*sin(pi*y/ly)` | `flow = none`, Dirichlet zero walls. Analytical reference. |
-| `pigment_drop` | `c0 + A*exp(-((x-x0)^2 + (y-y0)^2)/(2*sigma^2))` | Default advection–diffusion case. |
+| `heated_top` | $c_0$ everywhere | Heat-only demonstration. flow amplitude $A = 0$, Dirichlet walls with a hot top. |
+| `constant` | $c_0$ everywhere | With all no-flux walls equal $c_0$. Must stay constant under the flow, even when the double gyre is active. |
+| `sine_decay` | $A_0\sin\!\big(\tfrac{\pi x}{l_x}\big)\sin\!\big(\tfrac{\pi y}{l_y}\big)$ | Flow amplitude $A = 0$. Analytical reference. |
+| `pigment_drop` | $c_0 + A_0\exp\!\Big(-\dfrac{(x-x_0)^2 + (y-y_0)^2}{2\sigma^2}\Big)$ | Default advection–diffusion case. A Gaussian-shaped pigment blob centered at $(x_0,y_0)$, with $\sigma$ controlling its width. The double gyre will transport, stretch this blob throughout time. |
 
 ## Time step
-
+This part, we explain how to choose an appropriate time step. As we employ the forward Euler scheme, we must constrain the time step size for stability.
 Define the advective and diffusive rates:
 
-```text
-a = umax/dx + vmax/dy                    (umax, vmax from the flow's speed bounds)
-d = 2*kappa*(1/dx^2 + 1/dy^2)
-```
+$$
+a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y}
+\quad\text{($u_{\max}$, $v_{\max}$ from the flow's speed bounds)},
+\qquad
+d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right)
+$$
 
-Validate positive dimensions, positive `kappa`, positive `dt` and
+Validate positive dimensions, positive $\kappa$, positive $\Delta t$ and
 
-```text
-dt * (a + d) <= 1
-```
+$$
+\Delta t\,(a + d) \le 1
+$$
 
-For a discretely divergence-free flow this keeps every update weight non-negative in cells away from Dirichlet walls. Each new value is then a convex combination of old values, so no new maximum or minimum is created there and the scheme is stable. With `u = 0` the condition reduces to the earlier `rx + ry <= 0.5`, where `rx = kappa*dt/dx^2` and `ry = kappa*dt/dy^2`.
+This serves as a sufficient stability restriction given our schemes. For a discretely divergence-free flow this keeps every update weight non-negative in cells away from Dirichlet walls. Each new value is then a convex combination of old values, so no new maximum or minimum is created there and the scheme is stable. With $\mathbf{u} = 0$ the condition reduces to the earlier $r_x + r_y \le \tfrac12$, where $r_x = \kappa\Delta t/\Delta x^2$ and $r_y = \kappa\Delta t/\Delta y^2$.
 
-For automatic time stepping, `cfl` in `(0,1]` is a safety fraction:
+For automatic time stepping, `cfl` in $(0,1]$ is a safety fraction:
 
-```text
-dt = cfl / (a + d)
-```
+$$
+\Delta t = \frac{\mathrm{cfl}}{a + d}
+$$
 
-A Dirichlet ghost value `2*g - c_adjacent` can lie outside the range of the initial and wall data. In cells next to a Dirichlet wall with zero wall-face velocity, the update weights stay non-negative only under the stricter condition `dt * (a + 3*kappa*(1/dx^2 + 1/dy^2)) <= 1`, so the maximum-principle check is asserted only when that holds or when walls are `noflux`.
+We can then try different time step size to investigate the stability dynamics.
 
-Use fixed steps for primary scaling tests. Comparisons at different grid resolutions over the same physical duration must recompute stable time steps and the corresponding step counts; record the actual final time.
+Record the Péclet numbers for each run, $\mathrm{Pe} = UL/\kappa$, using a characteristic speed $U$ and length $L$, and the grid Péclet number $\mathrm{Pe}_{\text{grid}} = \max(u_{\max}\Delta x,\, v_{\max}\Delta y)/\kappa$. A large Péclet number means the transport by the advection dominates diffusion. When $\mathrm{Pe}_{\text{grid}}$ is well above 2, upwind numerical diffusion is comparable to or larger than the physical diffusion, and this means while we can keep the computation stable, it may become physically inaccurate already.
 
-Record the Péclet numbers for each run: `Pe = U*L/kappa`, using a characteristic speed `U` and length `L`, and the grid Péclet number `Pe_grid = max(umax*dx, vmax*dy)/kappa`. When `Pe_grid` is well above 2, upwind numerical diffusion is comparable to or larger than the physical diffusion, and fine filaments are not resolved.
+This constraint is derived in the following way. As we use first-order upwind difference scheme for advection, we have numerical diffusion of roughly $\kappa_{num}\approx \frac{|u|\Delta x}{2}$, and similarly for $y$. Then, we have $\kappa_{num}/\kappa \approx \frac{|u|\Delta x}{2\kappa}$.
+
+Finally, we can represent the pipeline for fitting a proper time step size. Given parameters $\Delta x, \Delta y, \kappa, A, \varepsilon, l_x, l_y$, we can compute speed bounds $u_{max}, v_{max}$ and the following rates $a, d$ defined above. As a last step, select $\Delta t=\text{cfl}/(a+d)$ and put it into test.
 
 ## Data storage and shared computation
 
@@ -143,13 +239,13 @@ Initialize interiors by global coordinates. Fill physical-wall ghosts by the bou
 
 ### Rows
 
-Distribute `ny` rows over the ranks. With `base=ny/p` and `extra=ny%p`, the first `extra` logical row positions get `base+1` rows and the rest get `base`. Compute global starting rows from prefix sums or the equivalent arithmetic formula.
+Distribute $n_y$ rows over the $p$ ranks. With $q = \lfloor n_y/p\rfloor$ and $r = n_y \bmod p$, the first $r$ logical row positions get $q+1$ rows and the rest get $q$. Compute global starting rows from prefix sums or the equivalent arithmetic formula.
 
 Use a process topology with upper/lower neighbors. Do not confuse Cartesian rank numbers with world rank numbers when reordering is enabled.
 
 ### Two-dimensional blocks
 
-Use a `[py, px]` Cartesian process grid, with `py*px = p`. Divide rows and columns independently, including remainders. An explicit grid must fit within the global grid dimensions; reject zero-sized local blocks. Automatic process-grid selection should also respect this requirement.
+Use a $[p_y, p_x]$ Cartesian process grid, with $p_y p_x = p$. Divide rows and columns independently, including remainders. An explicit grid must fit within the global grid dimensions; reject zero-sized local blocks. Automatic process-grid selection should also respect this requirement.
 
 Derive neighbors with MPI topology utilities. Physical walls belong only to ranks on the global edge. Columns are not contiguous in row-major storage: implement either column packing or an appropriate MPI datatype, document it and keep it consistent across communication-mode comparisons.
 
@@ -181,11 +277,17 @@ Support builds without OpenMP by guarding OpenMP-specific calls with the build d
 
 ## Diagnostics
 
-Total scalar `M = sum(c(i,j)) * dx * dy` over interior cells. With `noflux` walls `M` is conserved up to rounding. In the parallel solver `M` needs an `MPI_Allreduce`; compute it only at snapshot intervals or after the timed loop, and compare serial and parallel values with a tolerance because the summation order differs.
+Total scalar over interior cells:
+
+$$
+M = \Delta x\,\Delta y \sum_{i,j} c_{i,j}.
+$$
+
+With `noflux` walls $M$ is conserved up to rounding. In the parallel solver $M$ needs an `MPI_Allreduce`; compute it only at snapshot intervals or after the timed loop, and compare serial and parallel values with a tolerance because the summation order differs.
 
 ## Output and metrics
 
-Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the `ny x nx` interior cells once, never ghost cells or duplicate process halos. Record the wall type and wall values in the run metadata.
+Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the wall type and wall values in the run metadata.
 
 Time the whole loop, including necessary communication, wall-ghost filling and any per-step velocity evaluation. Synchronize before the timed MPI region and report the maximum elapsed time over ranks. Keep initialization, validation and output timings separate. Phase timings under overlap are diagnostic and must not be blindly added together.
 
@@ -197,7 +299,7 @@ The project uses CPUs, a five-point stencil with first-order upwind advection, c
 
 This design supersedes the heat-only, node-based design. The following files still describe the old model and need matching updates:
 
-- `docs/experiment_plan.md`: new checks for mass conservation, constant field with flow, rotation and uniform-flow Gaussian tests; the sine-decay test now uses cell centres.
-- `config/defaults.json`, `config/README.md`: `kappa`, `flow` and its parameters, `boundary_type`, `pigment_drop` parameters, the new time-step rule and `dx = lx/nx`.
-- `experiments/*.json`: flow and wall settings; weak scaling now uses `lx = px*local_nx*dx`, and needs fixed speed bounds as the domain grows.
+- `docs/experiment_plan.md`: new checks for mass conservation and constant field under the double-gyre flow; the sine-decay test ($A = 0$) now uses cell centres.
+- `config/defaults.json`, `config/README.md`: `kappa`, the double-gyre parameters ($A$, $\varepsilon$, $\omega$), `boundary_type`, `pigment_drop` parameters, the new time-step rule and $\Delta x = l_x/n_x$.
+- `experiments/*.json`: flow and wall settings; weak scaling now uses $l_x = p_x\,n_{x,\text{local}}\,\Delta x$, and needs fixed speed bounds as the domain grows.
 - `src/*/README.md`, `results/raw/metrics_columns.csv`, `scripts/README.md`, `hpc/job_template.sh`, `report/report.md` and the top-level `README.md`.
