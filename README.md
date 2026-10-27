@@ -1,170 +1,176 @@
 # Parallel Heat2D
 
-A course project on parallel two-dimensional heat diffusion using C++, MPI and OpenMP.
+Two-dimensional heat diffusion in C++17, with a serial reference and MPI + OpenMP implementations. The same five-point finite-difference update is used by every solver.
 
-We will implement the same numerical method in serial and in parallel, then compare how domain decomposition, halo communication and thread allocation affect correctness and performance.
+## What is implemented
 
-## Current status
+- Contiguous double-precision grids, fixed physical boundaries and double buffering.
+- `heated_top`, `constant` and analytical `sine_decay` initial-condition cases.
+- Automatic stable time-step selection and validation of explicit time steps.
+- A pure serial executable, independent of MPI and OpenMP.
+- MPI row or 2D block decomposition, including remainders and thin local blocks.
+- Blocking halo exchange, and nonblocking exchange overlapping interior computation.
+- OpenMP point updates with MPI calls confined to the initializing thread.
+- Final-field CSV export, one-line JSON runtime/metadata output and full-field validation.
+- Configuration-driven benchmark runs with warmups, raw repetitions, logs and provenance.
+- Temperature, runtime, speedup, strong-efficiency and weak-efficiency plotting.
+- VS Code build tasks and a serial GDB debug configuration for WSL Ubuntu.
 
-**This is a repository scaffold. The numerical solvers and experiment tools have not been implemented yet.**
+**Local numerical checks have run. Atlas/Vanda measurements and the final report are still pending.** See [verification.md](docs/verification.md) for the actual tested environment and results. No local demo timing is presented as an HPC benchmark.
 
-Included now:
+For Windows setup and detailed Chinese instructions, start with [START_HERE_zh.md](START_HERE_zh.md).
 
-- Repository description, project scope and development conventions.
-- CMake configuration with solver builds disabled by default.
-- Default parameters and planned experiment configurations.
-- Design notes, an experiment plan and a report outline.
-- Source-directory guides and an HPC job template.
+## Model
 
-Not included yet:
-
-- C++ solver source files or executable binaries.
-- Benchmark runners, correctness-checking scripts or plotting scripts.
-- Measured performance results or completed validation results.
-
-The solver commands below describe the **planned interface**. They cannot run until the relevant source files are implemented.
-
-For initial setup instructions in Chinese, see [START_HERE_zh.md](START_HERE_zh.md).
-
-Initial repository/configuration checks are recorded in [docs/scaffold_checks.md](docs/scaffold_checks.md). These are not numerical solver tests.
-
-## Problem
-
-We model heat diffusion on a rectangular plate with a constant diffusivity and no internal heat source:
+The plate has size `lx` by `ly`, constant positive diffusivity `alpha`, no source term, and fixed Dirichlet boundaries. The model is:
 
 ```text
 dT/dt = alpha * (d2T/dx2 + d2T/dy2)
-```
 
-The first demonstration case starts with an interior temperature of 20 degrees Celsius, holds the top boundary at 100 degrees Celsius, and holds the other three boundaries at 20 degrees Celsius. These are a synthetic example, not measured material properties.
-
-The numerical method is explicit forward Euler in time with a five-point central-difference stencil in space:
-
-```text
 next(i,j) = current(i,j)
           + rx * (current(i,j-1) - 2*current(i,j) + current(i,j+1))
           + ry * (current(i-1,j) - 2*current(i,j) + current(i+1,j))
-
-rx = alpha * dt / dx^2
-ry = alpha * dt / dy^2
 ```
 
-Here `i` is the row index and `j` is the column index. Each step reads the current field and writes a separate next field.
-
-`nx` and `ny` count **interior** grid points. On a plate of size `lx` by `ly`, `dx = lx/(nx+1)` and `dy = ly/(ny+1)`. Both serial and parallel solvers use these global spacings.
-
-For this method, require `rx + ry <= 0.5`. With automatic time stepping:
+`i` is a top-down row index; `j` is a column index. `nx` and `ny` count interior columns and rows. Physical boundaries add two rows and two columns to a full field. Local MPI fields additionally hold one-cell halos; process halos are excluded from global output.
 
 ```text
-dt_max = 1 / (2 * alpha * (1/dx^2 + 1/dy^2))
-dt = cfl * dt_max, with 0 < cfl <= 1
+dx = lx/(nx+1), dy = ly/(ny+1)
+rx = alpha*dt/dx^2, ry = alpha*dt/dy^2
+rx + ry <= 0.5
+
+dt_max = 1 / (2*alpha*(1/dx^2 + 1/dy^2))
+automatic dt = cfl * dt_max
 ```
 
-The default `cfl` is 0.8. In this repository, `cfl` means the fraction of the maximum stable time step, not the value of `rx` or `ry`.
+Default `cfl=0.8` is a fraction of the maximum stable time step. It is not `rx` or `ry`. Both solvers derive spacing from global dimensions. Use two arrays: read current, write next, complete the step, then swap buffers.
 
-## Planned implementations
+The default demonstration uses 20°C initially, a 100°C top edge, and three 20°C edges. These are synthetic conditions, not measured material properties. Left/right edge values take precedence at the four corners.
 
-| Executable or mode | Purpose |
-| --- | --- |
-| `heat_serial` | A single-threaded reference implementation with no MPI dependency. |
-| `heat_parallel --decomp rows --exchange blocking` | MPI row decomposition with optional OpenMP computation. |
-| `heat_parallel --decomp 2d --exchange blocking` | A two-dimensional MPI process grid with optional OpenMP computation. |
-| `heat_parallel --decomp rows/2d --exchange overlap` | Nonblocking halo exchange with interior computation before waiting. |
+## Build on Ubuntu / WSL
 
-The actual `--decomp` values will be `rows` or `2d`; `rows/2d` above denotes two choices. Set `OMP_NUM_THREADS=1` for an MPI-only baseline. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
-
-## Repository layout
-
-| Path | Contents |
-| --- | --- |
-| [src/common/](src/common/README.md) | Planned configuration, grid, physics, stencil and output components. |
-| [src/serial/](src/serial/README.md) | Planned serial driver and solver. |
-| [src/parallel/](src/parallel/README.md) | Planned MPI driver, solver, decomposition and halo exchange. |
-| [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
-| [experiments/](experiments/README.md) | Planned correctness and performance experiment configurations. |
-| [scripts/](scripts/README.md) | Specifications for the tools to implement later. |
-| [hpc/](hpc/README.md) | HPC setup notes and an unconfigured job template. |
-| [results/raw/](results/raw/README.md) | Measured benchmark CSV files, when available. |
-| [results/figures/](results/figures/README.md) | Selected figures generated from measured data. |
-| [docs/design.md](docs/design.md) | Numerical and software design decisions. |
-| [docs/experiment_plan.md](docs/experiment_plan.md) | Correctness checks and fair timing conventions. |
-| [docs/ai_usage.md](docs/ai_usage.md) | Record of AI assistance and subsequent verification. |
-| [docs/references.md](docs/references.md) | Technical references. |
-| [report/report.md](report/report.md) | Report outline; no experimental findings are claimed. |
-
-## Requirements
-
-- CMake 3.16 or newer.
-- A C++17 compiler.
-- An MPI implementation for the parallel target.
-- Compiler support for OpenMP when OpenMP is enabled.
-- Python 3.9 or newer for future experiment utilities.
-
-The C++ solver will not depend on Python. `requirements.txt` lists NumPy and Matplotlib for future checking and plotting tools; these tools are not included yet. Configurations are JSON for the planned Python runner. The C++ programs will receive command-line arguments, so they do not need a JSON library.
-
-## Configure the scaffold now
+Install the system packages once:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+sudo apt update
+sudo apt install -y build-essential cmake gdb openmpi-bin libopenmpi-dev python3-venv python3-pip
 ```
 
-This checks the CMake project setup and compiler. It deliberately creates no solver executables because `HEAT2D_BUILD_SOLVERS` defaults to `OFF`. It does not check MPI or OpenMP availability in scaffold mode.
-
-## Build after implementing the solver sources
-
-**Future workflow:**
+From the repository root:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHEAT2D_BUILD_SOLVERS=ON
-cmake --build build --parallel
+cmake --build build --parallel 2
 ```
 
-Enabling solver builds now will stop with a message listing the source files that still need to be implemented. MPI and OpenMP checks happen only after these files are present.
+The explicit `HEAT2D_BUILD_SOLVERS=ON` overrides the old scaffold's cached `OFF` setting. MPI and OpenMP are enabled by default. To build only the serial executable, use a separate build directory with `-DHEAT2D_ENABLE_MPI=OFF`. To build MPI without OpenMP, pass `-DHEAT2D_ENABLE_OPENMP=OFF` and request one thread per rank.
 
-For a future serial-only build, also pass `-DHEAT2D_ENABLE_MPI=OFF`. A compiler wrapper can be supplied with `-DCMAKE_CXX_COMPILER=mpicxx` when appropriate for the environment.
+CMake 3.16+, a C++17 compiler and an MPI-3+ implementation are sufficient for the core. Python 3.9+, NumPy and Matplotlib serve the experiment tools. The C++ solvers do not depend on Python or a JSON library.
 
-## Planned command-line interface
+## Run the solvers
 
 Serial:
 
 ```bash
-./build/heat_serial --nx 256 --ny 256 --steps 1000 --case heated_top --cfl 0.8 --output outputs/serial.csv
+./build/heat_serial --nx 128 --ny 128 --steps 2000 --case heated_top --output outputs/serial.csv
 ```
 
-Parallel, with four MPI ranks and four threads per rank:
+Parallel on local Open MPI, two ranks and two threads per rank:
 
 ```bash
-OMP_NUM_THREADS=4 mpiexec -n 4 ./build/heat_parallel --nx 256 --ny 256 --steps 1000 --case heated_top --cfl 0.8 --decomp 2d --exchange overlap --output outputs/parallel.csv
+OMP_NUM_THREADS=2 mpiexec --bind-to none -n 2 ./build/heat_parallel --nx 128 --ny 128 --steps 2000 --case heated_top --decomp 2d --exchange overlap --output outputs/parallel.csv
 ```
 
-These examples use a POSIX shell. Native Windows shell syntax differs. HPC runs must use the scheduler and launcher approved for Atlas or Vanda, with matching CPU allocations.
+The second example requests four CPU workers. Use `OMP_NUM_THREADS=1` for a two-worker demonstration. `--bind-to none` is an Open MPI option for this local correctness/demo command; configure deliberate placement for performance experiments.
 
-Additional planned options are documented in [config/README.md](config/README.md). No benchmark runner command is provided yet because that tool does not exist.
+Run `./build/heat_serial --help` for all options. `heat_parallel` accepts `--decomp rows|2d`, `--exchange blocking|overlap`, optional `--py`/`--px`, and an optional `--threads N` override. MPI ranks are set by the launcher. Without an explicit thread count or `OMP_NUM_THREADS`, the parallel executable uses one thread per rank.
 
-## Validation and experiments
+Both commands print one JSON record. `elapsed_s` covers the solver loop only, including required communication and threading. The parallel record reports the maximum rank-local elapsed time. Initialization, halo datatype creation, gathering, checking and file output are outside that timer. Zero steps are supported for initialization checks.
 
-- Compare full temperature fields from serial and parallel runs of the same problem.
-- Check constant temperature fields, fixed boundaries, non-divisible partitions and small local blocks.
-- Use a decaying sine field for an independent analytical check and mesh refinement study.
-- Measure strong scaling, weak scaling, rank/thread allocation and communication strategies.
-- Exclude file I/O and validation from solver-loop timing, and report them separately where useful.
-- Use the maximum elapsed time across MPI ranks as parallel runtime.
-- Preserve raw timings, environment details and the exact commit used.
+## Check correctness
 
-See [experiments/README.md](experiments/README.md) for configuration semantics and [docs/experiment_plan.md](docs/experiment_plan.md) for the measurement protocol.
+Fast local checks, at most two ranks and one thread per rank:
 
-## Development order
+```bash
+python scripts/check_correctness.py --quick
+```
 
-1. Implement shared parameters, grids, initialization and the update formula.
-2. Implement and validate `heat_serial`.
-3. Implement row decomposition and blocking MPI halo exchange.
-4. Add OpenMP computation and verify hybrid configurations.
-5. Add two-dimensional decomposition, including column communication.
-6. Add nonblocking exchange and computation overlap.
-7. Implement the experiment utilities, run local checks and collect HPC measurements.
-8. Write conclusions from the measured data and finish the report.
+Full default checks, up to six ranks and two threads per rank:
 
-## Submission scope
+```bash
+python scripts/check_correctness.py
+```
 
-The assignment asks for a PDF report, source code with running instructions, measured runtime figures from Atlas or Vanda, correctness validation and an explanation of AI use. The supplied assignment specifies submission before 13 November 2026 and mentions an optional progress report before 30 October. Confirm the precise cutoff time on Canvas.
+Extended MPI cases, including thin grids, all four strategies and larger row/column messages:
+
+```bash
+python tests/test_integration.py
+```
+
+For a serial-only build, use `python scripts/check_correctness.py --serial-only --build-dir build-serial`. Checks include a hand-computed first step, fixed boundaries, the discrete maximum principle, constant fields, full serial/parallel equivalence, invalid inputs and sine-field refinement at a common final time. Summaries and diagnostic fields are written under ignored `outputs/` directories.
+
+Serial/parallel comparison tolerances are separate from analytical discretization errors. Parent directories for CSV outputs are created automatically. CSV matrices have numeric values only, with the full `(ny+2, nx+2)` physical field and round-trip double precision.
+
+## View a temperature field
+
+```bash
+python scripts/plot_temperature.py outputs/serial.csv --output outputs/temperature.png --vmin 20 --vmax 100
+```
+
+Open the PNG in VS Code. [examples/](examples/README.md) contains a real local demonstration and a compact validation summary.
+
+## Run experiments
+
+Start with the small local pipeline check:
+
+```bash
+python scripts/run_benchmarks.py --config experiments/smoke_scaling.json
+python scripts/plot_results.py outputs/smoke/metrics.csv --out-dir outputs/smoke/figures
+```
+
+Resolve a larger plan without running it:
+
+```bash
+python scripts/run_benchmarks.py --config experiments/strong_scaling.json --dry-run
+```
+
+The three full performance manifests cover strong scaling, weak scaling and fixed-core strategy comparisons. Run them only inside suitable CPU/memory allocations. `--allocated-cores N` declares the total available CPUs for a multi-node job; the default guard uses the local CPU affinity. This is a resource guard, not a scheduler allocation request.
+
+Open MPI hybrid placement can be supplied per configuration:
+
+```bash
+OMP_PLACES=cores OMP_PROC_BIND=close python scripts/run_benchmarks.py --config experiments/strategies.json --mpi-arg=--map-by '--mpi-arg=slot:PE={threads}' --mpi-arg=--bind-to --mpi-arg=core
+```
+
+`{threads}` and `{ranks}` in launcher arguments are expanded for each run. Placement syntax is MPI/platform-specific. The same parser accepts `--launcher PATH` and repeated `--mpi-arg=VALUE`; a scheduler-based launcher must be configured for the actual HPC environment.
+
+Raw CSV records distinguish warmups from measured repetitions. The plotter defaults to the latest session, reports measured medians and, for runtime plots, min–max ranges. Strong-scaling speedup uses the matching pure serial reference. Weak-scaling efficiency uses the smallest MPI layout with the same thread count, not the serial executable.
+
+See [experiment_plan.md](docs/experiment_plan.md), [experiment configurations](experiments/README.md) and [HPC setup](hpc/README.md).
+
+## Code map
+
+| Path | Responsibility |
+| --- | --- |
+| `src/common/` | CLI, grid, initial/boundary conditions, stencil, CSV and JSON output. |
+| `src/serial/` | Serial main program and time loop. |
+| `src/parallel/` | MPI topology, halo exchange, threaded kernels, gather and parallel driver. |
+| `scripts/common.py` | Configuration merging, launching, result parsing and metadata. |
+| `scripts/check_correctness.py` | Numerical validation and refinement. |
+| `scripts/run_benchmarks.py` | Sequential experiment runs and retained records. |
+| `scripts/plot_temperature.py`, `scripts/plot_results.py` | Headless PNG plotting. |
+| `.vscode/` | WSL build, validation and serial-debug tasks. |
+| `tests/` | Extended MPI integration checks. |
+| `hpc/` | Platform-adaptation notes and a job template. |
+| `docs/`, `report/` | Design, verification, AI record and report outline. |
+
+The 2D process-grid selector minimizes estimated local perimeter among fitting factorizations. Cartesian rank reordering is disabled; all topology operations still use the Cartesian communicator. Columns use `MPI_Type_vector` in both exchange modes. MPI calls stay on the initializing thread with `MPI_THREAD_FUNNELED`. The overlap path completes all requests before swapping buffers and handles blocks without a strict interior.
+
+## Current limits
+
+This version supports CPU computation, constant diffusivity, fixed boundaries and fixed step counts. It writes final fields; intermediate snapshots remain disabled (`snapshot_interval=0`). Global CSV gathering uses MPI `int` counts and is limited to at most `INT_MAX` interior points, with enough root memory. Large performance runs should avoid field export.
+
+The included HPC template still needs actual queue/module/launcher settings. Numerical checks have run in a local Linux container; the complete Windows/WSL desktop workflow and Atlas/Vanda jobs have not been executed here. The report outline still needs real HPC measurements and discussion. AI assistance is recorded in [docs/ai_usage.md](docs/ai_usage.md).

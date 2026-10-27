@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "kind": "strong_scaling",
+  "defaults": "../config/defaults.json",
+  "description": "Small local end-to-end check of the benchmark/plotting pipeline; not an HPC result.",
+  "problem": {"nx": 128, "ny": 96, "steps": 80},
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [{"mpi_ranks": 1, "omp_threads": 1}, {"mpi_ranks": 2, "omp_threads": 1}],
+  "warmup_runs": 1,
+  "repetitions": 2,
+  "output": {"directory": "outputs/smoke", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "outputs/smoke/metrics.csv"
+}

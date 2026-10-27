@@ -1,6 +1,6 @@
 # Design notes
 
-Status: planned design. The numerical and parallel implementations have not been written yet.
+Status: implemented CPU design. For completed local checks, see [verification.md](verification.md). HPC measurements remain to be collected.
 
 ## Model and indexing
 

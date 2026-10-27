@@ -1,6 +1,6 @@
 # Validation and performance plan
 
-Status: planned. No checks or benchmarks are claimed as completed.
+This document defines the experiment protocol. Completed local numerical and pipeline checks are recorded in [verification.md](verification.md). Atlas/Vanda performance measurements remain pending.
 
 ## Correctness
 

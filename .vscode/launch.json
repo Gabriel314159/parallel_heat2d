@@ -1,0 +1,6 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {"name": "Debug serial solver (WSL)", "type": "cppdbg", "request": "launch", "program": "${workspaceFolder}/build-debug/heat_serial", "args": ["--nx", "16", "--ny", "16", "--steps", "10"], "cwd": "${workspaceFolder}", "MIMode": "gdb", "miDebuggerPath": "/usr/bin/gdb", "preLaunchTask": "Build Debug", "stopAtEntry": false}
+  ]
+}

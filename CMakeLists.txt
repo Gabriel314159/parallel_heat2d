@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
-project(ParallelHeat2D VERSION 0.1.0 LANGUAGES CXX)
+project(ParallelHeat2D VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(HEAT2D_BUILD_SOLVERS "Build solvers after their source files have been implemented" OFF)
+option(HEAT2D_BUILD_SOLVERS "Build the implemented solvers" ON)
 option(HEAT2D_ENABLE_MPI "Build the parallel MPI target" ON)
 option(HEAT2D_ENABLE_OPENMP "Enable OpenMP in the parallel target" ON)
 
@@ -52,6 +53,7 @@ endif()
 
 add_library(heat2d_common STATIC ${HEAT2D_COMMON_SOURCES})
 target_include_directories(heat2d_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_definitions(heat2d_common PUBLIC HEAT2D_BUILD_TYPE="$<CONFIG>")
 
 add_executable(heat_serial ${HEAT2D_SERIAL_SOURCES})
 target_link_libraries(heat_serial PRIVATE heat2d_common)

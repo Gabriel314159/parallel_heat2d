@@ -1,10 +1,10 @@
-# Planned experiments
+# Experiment configurations
 
-These JSON documents are experiment specifications, not executable scripts. The planned runner is described in [scripts/README.md](../scripts/README.md).
+These JSON documents are read by the implemented benchmark and correctness tools described in [scripts/README.md](../scripts/README.md).
 
-All experiment files use schema version 1 and inherit [defaults.json](../config/defaults.json). Each file declares its type through `kind`. Paths in `defaults` are relative to that experiment file; result paths are relative to the repository working directory.
+The small `smoke_scaling.json` configuration checks the local end-to-end workflow without claiming an HPC result. All experiment files use schema version 1 and inherit [defaults.json](../config/defaults.json). Each file declares its type through `kind`. Paths in `defaults` are relative to that experiment file; result paths are relative to the repository working directory.
 
-| File | Kind | Planned use |
+| File | Kind | Use |
 | --- | --- | --- |
 | [correctness.json](correctness.json) | `correctness` | Explicit small runs, each compared with its own matching serial reference. |
 | [strong_scaling.json](strong_scaling.json) | `strong_scaling` | Fixed global problem and increasing ranks at one thread per rank. |

@@ -1,5 +1,7 @@
 # Initial scaffold checks
 
+Historical record for the 20 October documentation-only package. The implemented version and its later tests are described in [verification.md](verification.md).
+
 Checked on 20 October 2026 in a Linux development environment. These checks concern repository files and build configuration, not the unimplemented heat solver.
 
 Completed:

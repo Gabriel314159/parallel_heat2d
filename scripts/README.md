@@ -1,24 +1,19 @@
-# Experiment tools to implement
+# Experiment tools
 
-The scripts listed below are planned. No Python implementations are included yet.
+All listed Python tools are implemented. Run commands from the repository root with the Python environment activated.
 
-| Planned file | Responsibility |
+| File | Responsibility |
 | --- | --- |
-| `check_correctness.py` | Resolve correctness cases, invoke matching serial/parallel runs, compare full fields and exit nonzero on failed checks. |
-| `run_benchmarks.py` | Expand explicit experiment resources, preserve resolved parameters, run warmups/repetitions and append raw measurement records. |
-| `plot_results.py` | Read measured CSV files and produce timing, speedup, efficiency and strategy-comparison figures. |
-| `plot_temperature.py` | Plot a field matrix and its physical coordinates, using comparable temperature scales. |
+| `common.py` | Recursive configuration merging, stable-step checks, MPI launching, JSON parsing and provenance. |
+| `check_correctness.py` | Hand-computed update, physical invariants, serial/parallel field comparison and sine refinement. |
+| `run_benchmarks.py` | Explicit experiment expansion, resource guard, warmups, raw repetitions and logs. |
+| `plot_temperature.py` | A physical-coordinate temperature PNG from a final CSV field. |
+| `plot_results.py` | Latest-session measured medians, min–max runtime ranges, speedup and efficiency. |
 
-## Runner requirements
+Use `--help` on each command. MPI tools accept `--build-dir`, `--launcher`, repeated `--mpi-arg=VALUE` and `--timeout`. Launcher arguments expand `{threads}` and `{ranks}` per run. This accommodates platform-specific placement without shell interpolation.
 
-- Use `subprocess.run` with an argument list, not shell-interpolated command text.
-- Set thread environment variables explicitly and preserve launcher/resource metadata.
-- Run locally only within available CPU and memory resources. On HPC, run within the scheduler allocation.
-- Record failed runs as failures; do not synthesize zero timings or silently drop them.
-- Save all raw repetitions, plus a resolved configuration and environment metadata per experiment session.
-- Keep matrix output and verification outside measured solver-loop time.
-- Do not run all strong-scaling configurations concurrently on the same allocated resources.
-- For overlap experiments, do not add independently measured communication and computation times to claim total time: those phases can overlap.
-- Keep analytical-discretization error separate from serial/parallel equivalence error.
+The benchmark runner checks requested workers against local CPU affinity unless `--allocated-cores` explicitly declares an allocation. It does not allocate cluster resources. Warmups and failed runs are retained with distinct phase/status fields; failed solver invocations exit nonzero. The plotter excludes them from measured statistics and keeps sessions separate.
 
-The expected raw CSV columns are listed in [results/raw/metrics_columns.csv](../results/raw/metrics_columns.csv). The file contains a header only and is not an experimental result.
+Resolved configurations and environment records are written beside per-run stdout/stderr files. The CSV format is listed in [metrics_columns.csv](../results/raw/metrics_columns.csv). That file is a header template, not benchmark data.
+
+Only final fields are supported; `snapshot_interval` must remain zero. Configure fixed boundaries explicitly when changing JSON cases from the heated-top defaults. Analytical error is separate from serial/parallel equivalence error. Phase times are not added to claim total time under overlap.

@@ -1,8 +1,8 @@
-# Shared C++ components to implement
+# Shared C++ components
 
-This directory intentionally contains no solver source files yet.
+These C++ components are implemented and shared by both executables.
 
-| Planned file | Responsibility |
+| File | Responsibility |
 | --- | --- |
 | `config.hpp`, `config.cpp` | CLI parsing, parameter validation and global time-step calculation. |
 | `grid.hpp` | A contiguous `std::vector<double>`, local dimensions, one-cell halos and a row/column indexing API. |

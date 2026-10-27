@@ -1,10 +1,10 @@
 # Configuration conventions
 
-These JSON files define the planned interface. No program reads them yet. The future Python runner will load them and invoke the C++ CLI. Individual JSON paths and runtime output paths are resolved as described below.
+These JSON files are read by the Python experiment tools, which invoke the implemented C++ CLI. Individual JSON paths and runtime output paths are resolved as described below.
 
 ## Problem parameters
 
-| JSON field | Planned CLI | Meaning |
+| JSON field | CLI | Meaning |
 | --- | --- | --- |
 | `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of interior columns and rows. |
 | `problem.lx`, `problem.ly` | `--lx`, `--ly` | Physical plate dimensions. |
@@ -25,7 +25,7 @@ The top row of exported matrices corresponds to the physical top boundary (`y=ly
 
 ## Execution parameters
 
-| JSON field | Planned setting | Meaning |
+| JSON field | Setting | Meaning |
 | --- | --- | --- |
 | `execution.backend` | Executable selection | `serial` or `parallel`. |
 | `execution.mpi_ranks` | MPI launch option | Number of MPI ranks. |
@@ -34,14 +34,14 @@ The top row of exported matrices corresponds to the physical top boundary (`y=ly
 | `execution.exchange` | `--exchange` | `blocking` or `overlap`. |
 | `execution.process_grid` | `--py`, `--px` | Optional `[py, px]`; `py*px` must equal the number of ranks. |
 
-`serial` requires one rank and one thread. MPI must be launched by the appropriate local or HPC launcher. An unspecified 2D process grid will be chosen using MPI topology utilities. Reject grids that would leave any rank with zero interior rows or columns. Handle local dimensions of one or two cells correctly, even when no strictly interior region remains for overlap.
+`serial` requires one rank and one thread. MPI must be launched by the appropriate local or HPC launcher. An unspecified 2D process grid is selected from fitting factorizations to minimize estimated local perimeter; MPI Cartesian topology supplies its neighbors. Reject grids that would leave any rank with zero interior rows or columns. Handle local dimensions of one or two cells correctly, even when no strictly interior region remains for overlap.
 
 ## Output parameters
 
 - `output.directory`: relative to the repository working directory.
 - `output.write_field`: whether to write the final temperature matrix.
-- `output.snapshot_interval`: steps between snapshots; zero disables intermediate output.
-- Planned `--output PATH`: writes a selected final field. Create parent directories as needed.
+- `output.snapshot_interval`: must be zero in this version; intermediate snapshots are not implemented.
+- `--output PATH`: writes a selected final field. Create parent directories as needed.
 
 Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output. Field matrices are CSV files with `(ny+2)` rows and `(nx+2)` columns, including physical boundaries and excluding process halos. They contain numeric values only, with enough precision for double-precision round trips.
 

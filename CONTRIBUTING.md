@@ -25,7 +25,7 @@ Keep numerical behavior consistent across implementations. Make one focused chan
 
 Run the implemented correctness checks relevant to the change. Record the command, environment and observed result. A matching serial and parallel output does not independently validate the shared numerical formula; retain analytical and invariant-based checks as well.
 
-No solver checks exist in the initial scaffold. Do not mark planned checks as passed until they have actually run.
+Run `python scripts/check_correctness.py --quick` for a small local check, and `python tests/test_integration.py` when changing MPI communication or region updates. Use the full correctness configuration for the thread/resource layouts it requests. Record new actual results; do not treat the original scaffold checks as numerical validation.
 
 ## Results and documentation
 

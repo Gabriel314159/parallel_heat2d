@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Template only. Add the actual scheduler directives and module setup here.
-# Run this inside an allocated HPC job, after implementing and building the solver.
+# Run this inside an allocated HPC job, after building the solver.
 # MPI_LAUNCH_ARGS must contain the platform-approved launcher and rank options.
 set -euo pipefail
 
@@ -17,7 +17,7 @@ if [[ ${#MPI_LAUNCH_ARGS[@]} -eq 0 ]]; then
 fi
 
 if [[ ! -x ./build/heat_parallel ]]; then
-    echo "The parallel solver has not been implemented/built at ./build/heat_parallel." >&2
+    echo "The parallel solver has not been built at ./build/heat_parallel." >&2
     exit 2
 fi
 

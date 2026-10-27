@@ -1,15 +1,15 @@
-# MPI + OpenMP solver to implement
+# MPI + OpenMP solver
 
-No parallel C++ code is included in the scaffold.
+Both decomposition strategies and both communication modes are implemented.
 
-| Planned file | Responsibility |
+| File | Responsibility |
 | --- | --- |
 | `main.cpp` | MPI initialization, rank-aware errors, parameter handling, solver invocation and finalization. |
 | `solver.hpp`, `solver.cpp` | Time loop, OpenMP worksharing, strategy selection and timing. |
 | `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology and physical-edge ownership. |
 | `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange. |
 
-## Initial implementation
+## Implementation organization
 
 1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI.
 2. Split global rows across ranks, including any remainder. Then extend the same interface to a 2D Cartesian process grid.

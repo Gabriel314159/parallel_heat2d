@@ -1,0 +1,95 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "hand_computed_first_step",
+      "passed": true
+    },
+    {
+      "name": "heated_top_one_rank",
+      "passed": true,
+      "nx": 32,
+      "ny": 24,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 1,
+      "omp_threads": 1
+    },
+    {
+      "name": "uneven_rows_hybrid",
+      "passed": true,
+      "nx": 37,
+      "ny": 29,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 3,
+      "omp_threads": 2
+    },
+    {
+      "name": "uneven_2d_blocking",
+      "passed": true,
+      "nx": 37,
+      "ny": 29,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 6,
+      "omp_threads": 2
+    },
+    {
+      "name": "uneven_2d_overlap",
+      "passed": true,
+      "nx": 37,
+      "ny": 29,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 6,
+      "omp_threads": 2
+    },
+    {
+      "name": "small_local_blocks_overlap",
+      "passed": true,
+      "nx": 3,
+      "ny": 3,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 4,
+      "omp_threads": 1
+    },
+    {
+      "name": "constant_field",
+      "passed": true,
+      "nx": 31,
+      "ny": 23,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 4,
+      "omp_threads": 2
+    },
+    {
+      "name": "sine_decay",
+      "passed": true,
+      "nx": 40,
+      "ny": 32,
+      "max_abs_error": 0.0,
+      "mpi_ranks": 4,
+      "omp_threads": 2,
+      "analytical_max_abs_error": 8.164047713066225e-05
+    },
+    {
+      "name": "invalid_parameter_rejection",
+      "passed": true
+    },
+    {
+      "name": "sine_refinement_at_t_0.01",
+      "passed": true,
+      "sizes": [
+        16,
+        32,
+        64
+      ],
+      "errors": [
+        0.00060343418872566,
+        0.00016828338462759884,
+        4.3884705987262684e-05
+      ]
+    }
+  ],
+  "scope": "Local numerical validation; not an HPC performance result.",
+  "extended_comparisons": 32,
+  "extended_max_abs_error": 0.0,
+  "invalid_decomposition_rejected": true
+}
