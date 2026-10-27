@@ -5,7 +5,7 @@ Keep numerical behavior consistent across implementations. Make one focused chan
 ## Shared conventions
 
 - C++17, four-space indentation and LF line endings.
-- Use `double` for temperature values and numerical parameters.
+- Use `double` for field values and numerical parameters.
 - Store grid data contiguously and document local/global indexing.
 - Keep the serial target independent of MPI and OpenMP.
 - Keep MPI calls on the initializing thread in the initial hybrid implementation.

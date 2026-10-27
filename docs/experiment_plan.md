@@ -6,28 +6,38 @@ Status: planned. No checks or benchmarks are claimed as completed.
 
 ### Serial and parallel equivalence
 
-For each small case, compare the final full matrix from `heat_serial` with each selected parallel strategy. Use identical global grid dimensions, geometry, diffusivity, boundary/initial conditions, time step, step count and precision. Compare with an absolute and relative tolerance, initially `1e-10` each, and record the observed error.
+For each small case, compare the final full matrix from `heat_serial` with each selected parallel strategy. Use identical global grid dimensions, geometry, diffusivity, flow parameters, initial condition, time step, step count and precision. Compare with an absolute and relative tolerance, initially `1e-10` each, and record the observed error.
 
-Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both blocking and overlap modes. Check the physical boundary values separately.
+Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both row and 2D decompositions, and both blocking and overlap modes. Run these with the time-dependent double gyre switched on, plus one steady ($\varepsilon = 0$) case to exercise the fill-once velocity path.
+
+### Mass conservation
+
+With no-flux walls the total scalar $M = \Delta x\,\Delta y\sum c_{i,j}$ is conserved exactly by the flux-form scheme. For every correctness run, compute $M$ before and after the time loop and require
+
+$$
+\frac{\lvert M_{\text{end}} - M_0\rvert}{\lvert M_0\rvert} \le 10^{-12}.
+$$
+
+The `cosine_decay` mode has $M_0 = 0$; for it, check the absolute change $\lvert M_{\text{end}} - M_0\rvert$ against the same tolerance times $\Delta x\,\Delta y\sum\lvert c_{i,j}\rvert$ instead. A larger drift points to inconsistent face fluxes between neighbouring cells or ranks, a wrong ghost fill, or a velocity field that is not discretely divergence-free.
 
 ### Constant field
 
-Set all interior and boundary values to the same constant. Every numerical update should retain that constant up to floating-point roundoff. This checks initialization, boundary handling, halo updates and the update formula.
+Initialize every cell to the same constant $c_0$ with the double gyre switched on. Because the discrete flow is divergence-free and the walls are no-flux, every update must retain $c_0$ up to floating-point roundoff. This checks initialization, the ghost fill, halo updates, the face velocities and the update formula together.
 
-### Analytical sine decay
+### Analytical cosine decay
 
-For zero-temperature boundaries on `[0,lx] x [0,ly]`, initialize:
+With the flow switched off ($A = 0$), initialize
 
-```text
-T(x,y,0) = A * sin(pi*x/lx) * sin(pi*y/ly)
+$$
+c(x,y,0) = A_0\cos\!\Big(\frac{\pi x}{l_x}\Big)\cos\!\Big(\frac{\pi y}{l_y}\Big).
+$$
 
-T(x,y,t) = A * sin(pi*x/lx) * sin(pi*y/ly)
-           * exp(-alpha*pi^2*(1/lx^2 + 1/ly^2)*t)
-```
+Two separate comparisons:
 
-Evaluate at the actual `t = steps*dt`. A finite-difference solution has discretization error; it is not expected to match this continuous solution to the serial/parallel equivalence tolerance. Run a separate mesh-refinement study at a common physical final time, with stable time steps, and check that errors decrease. Record both time and spatial resolution.
+1. **Exact discrete solution.** The cosine mode is an eigenvector of the discrete scheme with no-flux walls (see `docs/design.md`), so after $n$ steps the computed field must equal $(1-\lambda\Delta t)^n\,c(x,y,0)$ to rounding, with $\lambda$ given in the design. This is an implementation check and uses a tight relative tolerance, initially `1e-12`.
+2. **Continuous solution.** Compare with $c(x,y,0)\,\exp\!\big(-\kappa\pi^2(1/l_x^2+1/l_y^2)\,t\big)$ at the actual $t = n\,\Delta t$. This difference is discretization error, not a bug, and is reported separately. Run a mesh-refinement study at a common physical final time, recomputing stable time steps, and check that the error decreases at the expected order. Record both time and spatial resolution.
 
-The correctness manifest includes one sine case for baseline equivalence and analytical error reporting. It does not by itself define the complete refinement study; add the common-final-time resolution series when implementing that study.
+The correctness manifest includes one cosine case for baseline equivalence and analytical error reporting. It does not by itself define the complete refinement study; add the common-final-time resolution series when implementing that study.
 
 ## Timing protocol
 
@@ -56,13 +66,13 @@ The denominator counts physical CPU cores when one thread is bound to each physi
 
 ## Weak scaling
 
-Keep a 512-by-512 interior block and four threads per rank, then use 1, 4 and 16 ranks with square process grids. Keep `dx` and `dy` fixed and grow the physical domain according to the configuration rules. Thus the automatic `dt`, step count and work per core remain comparable.
+Keep a 512-by-512 interior block and four threads per rank, then use 1, 4 and 16 ranks with square process grids. Keep `dx` and `dy` fixed and grow the physical domain according to the configuration rules. Scale the double-gyre amplitude with the domain size so that the speed bounds $u_{\max}$, $v_{\max}$ stay fixed. Thus the automatic `dt`, step count and work per core remain comparable.
 
 ```text
 weak-scaling efficiency = median_time(reference_resources) / median_time(larger_resources)
 ```
 
-The reference here is one MPI rank with four threads, not the single-threaded serial executable. Report this baseline explicitly. Weak scaling does not compare the same physical plate at different resolutions.
+The reference here is one MPI rank with four threads, not the single-threaded serial executable. Report this baseline explicitly. Weak scaling does not compare the same physical domain at different resolutions.
 
 ## Resource layout and communication
 
@@ -72,9 +82,10 @@ Inspect local block dimensions and exposed boundary lengths. A layout with less 
 
 ## Planned figures
 
-- Temperature field for a small demonstration case.
+- Pigment field for a small demonstration case, with an optional velocity overlay.
 - Maximum absolute serial/parallel difference for validation cases.
-- Analytical error versus resolution for the sine case.
+- Relative mass change for the validation cases.
+- Analytical error versus resolution for the cosine case.
 - Runtime, speedup and efficiency versus total cores for strong scaling.
 - Runtime or weak-scaling efficiency versus resources for weak scaling.
 - Fixed-core comparison of rank/thread layouts and communication strategies.

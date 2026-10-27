@@ -1,22 +1,22 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "problem": {
     "nx": 256,
     "ny": 256,
     "lx": 1.0,
     "ly": 1.0,
-    "steps": 1000,
-    "alpha": 1.0,
+    "steps": 10000,
+    "kappa": 0.005,
     "cfl": 0.8,
     "dt": null,
-    "case": "heated_top",
-    "initial_temperature": 20.0,
-    "boundaries": {
-      "top": 100.0,
-      "bottom": 20.0,
-      "left": 20.0,
-      "right": 20.0
-    }
+    "flow_amplitude": 0.1, 
+    "flow_epsilon": 0.25,
+    "flow_period": 10.0,
+    "case": "pigment_drop",
+    "background": 0.0,
+    "amplitude": 1.0,
+    "blob_centre": [0.5, 0.5],
+    "blob_width": 0.05
   },
   "execution": {
     "backend": "serial",

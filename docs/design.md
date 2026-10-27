@@ -47,7 +47,9 @@ $$
 - Because $\nabla\cdot\mathbf{u} = 0$, the advection term can be written as $\nabla\cdot(\mathbf{u}c) = \mathbf{u}\cdot\nabla c$. The discrete scheme below keeps the flux form so that the total amount of scalar is conserved exactly. This also enables us to design a correctness check for parallel computing in terms of volume preservation through time.
 - There is no source term, to keep the problem simple.
 
-With $A = 0$ the flow vanishes ($\mathbf{u} = 0$) and, with Dirichlet walls, the model reduces exactly to the heat equation with $\kappa$ as the thermal diffusivity. This special case provides an analytical reference.
+With $A = 0$ the flow vanishes ($\mathbf{u} = 0$) and the model reduces exactly to the heat equation with insulated (no-flux) walls and $\kappa$ as the thermal diffusivity. This special case provides an analytical reference.
+
+All four walls are no-flux walls; prescribed wall values (Dirichlet conditions) are not part of the model.
 
 All implementations solve the same discrete problem above.
 
@@ -66,7 +68,7 @@ The five-point update never reads a corner ghost cell, so corner values need no 
 
 ## Velocity on faces
 
-Store or evaluate one normal velocity $(u,v)=(\frac{\partial\psi}{\partial y},\frac{\partial\psi}{\partial x})$ per cell face, computed from $\psi$ at the face's two end points (cell corners):
+Store or evaluate one normal velocity $(u,v)=(\frac{\partial\psi}{\partial y},-\frac{\partial\psi}{\partial x})$ per cell face, computed from $\psi$ at the face's two end points (cell corners):
 
 on east face, we compute,
 $$
@@ -187,10 +189,28 @@ Initialize interiors from cell-centre global coordinates so that a change in dec
 
 | `case` | Initial field | Notes |
 | --- | --- | --- |
-| `heated_top` | $c_0$ everywhere | Heat-only demonstration. flow amplitude $A = 0$, Dirichlet walls with a hot top. |
-| `constant` | $c_0$ everywhere | With all no-flux walls equal $c_0$. Must stay constant under the flow, even when the double gyre is active. |
-| `sine_decay` | $A_0\sin\!\big(\tfrac{\pi x}{l_x}\big)\sin\!\big(\tfrac{\pi y}{l_y}\big)$ | Flow amplitude $A = 0$. Analytical reference. |
+| `constant` | $c_0$ everywhere | Must stay constant under the flow, even when the double gyre is active. |
+| `cosine_decay` | $A_0\cos\!\big(\tfrac{\pi x}{l_x}\big)\cos\!\big(\tfrac{\pi y}{l_y}\big)$ | Flow amplitude $A = 0$. Analytical reference (see below). |
 | `pigment_drop` | $c_0 + A_0\exp\!\Big(-\dfrac{(x-x_0)^2 + (y-y_0)^2}{2\sigma^2}\Big)$ | Default advection–diffusion case. A Gaussian-shaped pigment blob centered at $(x_0,y_0)$, with $\sigma$ controlling its width. The double gyre will transport, stretch this blob throughout time. |
+
+### Analytical reference: cosine decay
+
+With $A = 0$ and no-flux walls the model is the heat equation with zero-flux walls, and
+
+$$
+c(x,y,t) = A_0\cos\!\Big(\frac{\pi x}{l_x}\Big)\cos\!\Big(\frac{\pi y}{l_y}\Big)\,
+\exp\!\Big(-\kappa\pi^2\Big(\frac{1}{l_x^2}+\frac{1}{l_y^2}\Big)t\Big)
+$$
+
+is an exact solution: $\partial c/\partial x = 0$ at $x = 0, l_x$ and $\partial c/\partial y = 0$ at $y = 0, l_y$.
+
+The cosine mode is also an exact eigenvector of the discrete scheme. At cell centres it is symmetric about every wall face, so the mirror ghost fill $c_{\text{ghost}} = c_{\text{adjacent}}$ reproduces it exactly, and the five-point Laplacian multiplies it by $-\lambda$ with
+
+$$
+\lambda = \frac{4\kappa}{\Delta x^2}\sin^2\!\Big(\frac{\pi\Delta x}{2l_x}\Big) + \frac{4\kappa}{\Delta y^2}\sin^2\!\Big(\frac{\pi\Delta y}{2l_y}\Big).
+$$
+
+After $n$ forward-Euler steps the discrete solution is therefore exactly $(1-\lambda\Delta t)^n$ times the initial field. This gives two separate checks: agreement with $(1-\lambda\Delta t)^n$ to rounding (implementation correctness), and convergence towards the continuous exponential under refinement (discretization error).
 
 ## Time step
 This part, we explain how to choose an appropriate time step. As we employ the forward Euler scheme, we must constrain the time step size for stability.
@@ -209,7 +229,7 @@ $$
 \Delta t\,(a + d) \le 1
 $$
 
-This serves as a sufficient stability restriction given our schemes. For a discretely divergence-free flow this keeps every update weight non-negative in cells away from Dirichlet walls. Each new value is then a convex combination of old values, so no new maximum or minimum is created there and the scheme is stable. With $\mathbf{u} = 0$ the condition reduces to the earlier $r_x + r_y \le \tfrac12$, where $r_x = \kappa\Delta t/\Delta x^2$ and $r_y = \kappa\Delta t/\Delta y^2$.
+This serves as a sufficient stability restriction given our schemes. For a discretely divergence-free flow this keeps every update weight non-negative in every cell, including cells next to a no-flux wall. Each new value is then a convex combination of old values, so no new maximum or minimum is created there and the scheme is stable. With $\mathbf{u} = 0$ the condition reduces to the earlier $r_x + r_y \le \tfrac12$, where $r_x = \kappa\Delta t/\Delta x^2$ and $r_y = \kappa\Delta t/\Delta y^2$.
 
 For automatic time stepping, `cfl` in $(0,1]$ is a safety fraction:
 
@@ -287,7 +307,7 @@ With `noflux` walls $M$ is conserved up to rounding. In the parallel solver $M$ 
 
 ## Output and metrics
 
-Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the wall type and wall values in the run metadata.
+Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the flow parameters ($\kappa$, $A$, $\varepsilon$, $T$) and the mass error in the run metadata.
 
 Time the whole loop, including necessary communication, wall-ghost filling and any per-step velocity evaluation. Synchronize before the timed MPI region and report the maximum elapsed time over ranks. Keep initialization, validation and output timings separate. Phase timings under overlap are diagnostic and must not be blindly added together.
 
@@ -297,9 +317,7 @@ The project uses CPUs, a five-point stencil with first-order upwind advection, c
 
 ## Follow-up from the advection–diffusion change
 
-This design supersedes the heat-only, node-based design. The following files still describe the old model and need matching updates:
+This design supersedes the heat-only, node-based design with Dirichlet walls. The following files still describe the old model and need matching updates:
 
-- `docs/experiment_plan.md`: new checks for mass conservation and constant field under the double-gyre flow; the sine-decay test ($A = 0$) now uses cell centres.
-- `config/defaults.json`, `config/README.md`: `kappa`, the double-gyre parameters ($A$, $\varepsilon$, $\omega$), `boundary_type`, `pigment_drop` parameters, the new time-step rule and $\Delta x = l_x/n_x$.
-- `experiments/*.json`: flow and wall settings; weak scaling now uses $l_x = p_x\,n_{x,\text{local}}\,\Delta x$, and needs fixed speed bounds as the domain grows.
-- `src/*/README.md`, `results/raw/metrics_columns.csv`, `scripts/README.md`, `hpc/job_template.sh`, `report/report.md` and the top-level `README.md`.
+- `report/report.md`: sections 1 and 4.
+- `CONTRIBUTING.md`, `docs/references.md` (add LeVeque, *Finite Volume Methods for Hyperbolic Problems*).

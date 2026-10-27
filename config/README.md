@@ -6,22 +6,42 @@ These JSON files define the planned interface. No program reads them yet. The fu
 
 | JSON field | Planned CLI | Meaning |
 | --- | --- | --- |
-| `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of interior columns and rows. |
-| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Physical plate dimensions. |
+| `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of cells along x (columns) and y (rows). |
+| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Physical domain dimensions. |
 | `problem.steps` | `--steps` | Fixed number of explicit time steps. |
-| `problem.alpha` | `--alpha` | Positive constant diffusivity. |
-| `problem.cfl` | `--cfl` | Fraction of the maximum stable time step; must be in `(0,1]`. |
+| `problem.kappa` | `--kappa` | Positive constant diffusivity $\kappa$. |
+| `problem.cfl` | `--cfl` | Safety fraction of the maximum stable time step; must be in `(0,1]`. |
 | `problem.dt` | `--dt` | Optional positive time step. `null` selects automatic time stepping. |
-| `problem.case` | `--case` | `heated_top`, `constant`, or `sine_decay`. |
-| `problem.initial_temperature` | `--initial-temperature` | Initial interior temperature for heated-top and constant cases. |
-| `problem.boundaries.*` | `--top`, `--bottom`, `--left`, `--right` | Fixed physical boundary values. |
-| `problem.amplitude` | `--amplitude` | Amplitude for `sine_decay`; defaults to 1.0. |
+| `problem.flow_amplitude` | `--flow-amplitude` | Double-gyre amplitude $A$. `0` switches the flow off (heat equation). |
+| `problem.flow_epsilon` | `--flow-epsilon` | Double-gyre oscillation strength $\varepsilon \ge 0$. `0` gives the steady double gyre. |
+| `problem.flow_period` | `--flow-period` | Double-gyre period $T > 0$; $\omega = 2\pi/T$. |
+| `problem.case` | `--case` | `pigment_drop`, `constant` or `cosine_decay`. |
+| `problem.background` | `--background` | Background value $c_0$ for `pigment_drop` and `constant`. |
+| `problem.amplitude` | `--amplitude` | Initial-field amplitude $A_0$ for `pigment_drop` and `cosine_decay`. |
+| `problem.blob_centre` | `--blob-x`, `--blob-y` | Blob centre $[x_0, y_0]$ for `pigment_drop`, in physical coordinates. |
+| `problem.blob_width` | `--blob-width` | Gaussian width $\sigma > 0$ for `pigment_drop`. |
 
-Explicit `dt` takes precedence over automatic `cfl` time-step selection, but still must satisfy `rx + ry <= 0.5`. Derive `dx` and `dy` from global dimensions. Never derive them from local subdomain sizes.
+All four walls are no-flux walls; there is no boundary-type option and no wall values.
 
-`constant` requires the initial temperature and all four boundaries to agree. `sine_decay` requires zero values on all four boundaries and initializes `A*sin(pi*x/lx)*sin(pi*y/ly)`; it does not use `initial_temperature`.
+The grid is cell-centred: $\Delta x = l_x/n_x$ and $\Delta y = l_y/n_y$. Derive them from global dimensions, never from local subdomain sizes.
 
-The top row of exported matrices corresponds to the physical top boundary (`y=ly`). For the heated-top example, the four corners use the left/right boundary values. Five-point updates do not directly read the corner points, but this convention keeps full-field comparisons deterministic.
+Time step: with $u_{\max} = \lvert A\rvert\pi/l_y$, $v_{\max} = 2\lvert A\rvert\pi(1+2\varepsilon)/l_x$,
+
+$$
+a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y},
+\qquad
+d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right).
+$$
+
+Automatic stepping uses $\Delta t = \mathrm{cfl}/(a+d)$. An explicit `dt` takes precedence over `cfl` but must still satisfy $\Delta t\,(a+d) \le 1$. See `docs/design.md` for the derivation.
+
+Case requirements:
+
+- `pigment_drop`: initializes $c_0 + A_0\exp\!\big(-((x-x_0)^2+(y-y_0)^2)/(2\sigma^2)\big)$. The default advection–diffusion case; the total mass is conserved.
+- `constant`: initializes $c_0$. The field must stay constant under the flow.
+- `cosine_decay`: initializes $A_0\cos(\pi x/l_x)\cos(\pi y/l_y)$. Requires `flow_amplitude = 0`. Analytical reference; see `docs/design.md`.
+
+The top row of exported matrices corresponds to the cell row next to the top wall (`y=ly`).
 
 ## Execution parameters
 
@@ -39,11 +59,11 @@ The top row of exported matrices corresponds to the physical top boundary (`y=ly
 ## Output parameters
 
 - `output.directory`: relative to the repository working directory.
-- `output.write_field`: whether to write the final temperature matrix.
+- `output.write_field`: whether to write the final scalar field.
 - `output.snapshot_interval`: steps between snapshots; zero disables intermediate output.
 - Planned `--output PATH`: writes a selected final field. Create parent directories as needed.
 
-Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output. Field matrices are CSV files with `(ny+2)` rows and `(nx+2)` columns, including physical boundaries and excluding process halos. They contain numeric values only, with enough precision for double-precision round trips.
+Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output. Field matrices are CSV files with `ny` rows and `nx` columns of interior cell values, excluding ghost cells and process halos. They contain numeric values only, with enough precision for double-precision round trips.
 
 ## Defaults and overrides
 

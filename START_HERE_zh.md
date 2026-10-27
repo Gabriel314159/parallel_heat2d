@@ -56,8 +56,7 @@ cmake --build build
 
 - `config/defaults.json`：默认物理条件、网格尺寸、步数和输出设置。
 - `experiments/*.json`：正确性、强扩展、弱扩展和策略比较的计划配置。
-- `src/common/README.md`：公共数据结构和更新公式怎么组织。
-- `src/serial/README.md`、`src/parallel/README.md`：两种求解器的实现边界。
+- `src/README.md`：公共数据结构和更新公式怎么组织，以及串行和并行两种求解器的实现边界。
 - `docs/design.md`：需要统一的符号、索引、边界和通信规则。
 - `docs/experiment_plan.md`：如何验证、计时和计算加速比。
 - `docs/ai_usage.md`：已经发生的 AI 辅助及后续核查记录。

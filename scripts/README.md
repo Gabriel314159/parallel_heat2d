@@ -4,10 +4,10 @@ The scripts listed below are planned. No Python implementations are included yet
 
 | Planned file | Responsibility |
 | --- | --- |
-| `check_correctness.py` | Resolve correctness cases, invoke matching serial/parallel runs, compare full fields and exit nonzero on failed checks. |
+| `check_correctness.py` | Resolve correctness cases, invoke matching serial/parallel runs, compare full fields and exit nonzero on failed checks. Also checks mass conservation (relative mass change within `mass_conservation_rtol`), constant-field invariance under the flow, and `cosine_decay` against the exact discrete solution $(1-\lambda\Delta t)^n$; the error against the continuous solution is reported separately. |
 | `run_benchmarks.py` | Expand explicit experiment resources, preserve resolved parameters, run warmups/repetitions and append raw measurement records. |
 | `plot_results.py` | Read measured CSV files and produce timing, speedup, efficiency and strategy-comparison figures. |
-| `plot_temperature.py` | Plot a field matrix and its physical coordinates, using comparable temperature scales. |
+| `plot_field.py` | Plot a scalar field matrix on its physical cell-centre coordinates, using comparable colour scales. Optional velocity overlay (streamlines or arrows) evaluated from the double-gyre streamfunction at the snapshot time. |
 
 ## Runner requirements
 

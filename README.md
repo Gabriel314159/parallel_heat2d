@@ -1,6 +1,6 @@
 # Parallel Heat2D
 
-A course project on parallel two-dimensional heat diffusion using C++, MPI and OpenMP.
+A course project on a parallel two-dimensional advection–diffusion solver (pigment in a double-gyre flow) using C++, MPI and OpenMP.
 
 We will implement the same numerical method in serial and in parallel, then compare how domain decomposition, halo communication and thread allocation affect correctness and performance.
 
@@ -30,37 +30,31 @@ Initial repository/configuration checks are recorded in [docs/scaffold_checks.md
 
 ## Problem
 
-We model heat diffusion on a rectangular plate with a constant diffusivity and no internal heat source:
+We model a passive scalar $c(x,y,t)$, for example pigment concentration, carried by a prescribed flow and diffusing in a closed rectangular box $[0,l_x]\times[0,l_y]$:
 
-```text
-dT/dt = alpha * (d2T/dx2 + d2T/dy2)
-```
+$$
+\frac{\partial c}{\partial t} + \nabla\cdot(\mathbf{u}c) = \kappa\left(\frac{\partial^2 c}{\partial x^2} + \frac{\partial^2 c}{\partial y^2}\right)
+$$
 
-The first demonstration case starts with an interior temperature of 20 degrees Celsius, holds the top boundary at 100 degrees Celsius, and holds the other three boundaries at 20 degrees Celsius. These are a synthetic example, not measured material properties.
+- $\kappa > 0$ is a constant diffusivity.
+- $\mathbf{u} = (u, v)$ is the time-periodic **double gyre**, defined by a streamfunction $\psi$ with $u = \partial\psi/\partial y$, $v = -\partial\psi/\partial x$. It is divergence-free and has zero normal velocity on every wall.
+- All four walls are **no-flux** walls, so the total amount of scalar is conserved.
+- The default case drops a Gaussian blob of pigment into the box and lets the gyres stretch and fold it.
+- With flow amplitude $A = 0$ the model reduces to the heat equation with insulated walls, which gives an analytical reference.
 
-The numerical method is explicit forward Euler in time with a five-point central-difference stencil in space:
+The numerical method is a cell-centred finite-volume scheme: first-order upwind advection, central-difference diffusion and forward Euler in time, on a grid with $\Delta x = l_x/n_x$ and $\Delta y = l_y/n_y$. `nx` and `ny` count cells. The time step must satisfy
 
-```text
-next(i,j) = current(i,j)
-          + rx * (current(i,j-1) - 2*current(i,j) + current(i,j+1))
-          + ry * (current(i-1,j) - 2*current(i,j) + current(i+1,j))
+$$
+\Delta t\,(a + d) \le 1,
+\qquad
+a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y},
+\qquad
+d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right),
+$$
 
-rx = alpha * dt / dx^2
-ry = alpha * dt / dy^2
-```
+and automatic stepping uses $\Delta t = \mathrm{cfl}/(a+d)$ with $0 < \mathrm{cfl} \le 1$ (default 0.8).
 
-Here `i` is the row index and `j` is the column index. Each step reads the current field and writes a separate next field.
-
-`nx` and `ny` count **interior** grid points. On a plate of size `lx` by `ly`, `dx = lx/(nx+1)` and `dy = ly/(ny+1)`. Both serial and parallel solvers use these global spacings.
-
-For this method, require `rx + ry <= 0.5`. With automatic time stepping:
-
-```text
-dt_max = 1 / (2 * alpha * (1/dx^2 + 1/dy^2))
-dt = cfl * dt_max, with 0 < cfl <= 1
-```
-
-The default `cfl` is 0.8. In this repository, `cfl` means the fraction of the maximum stable time step, not the value of `rx` or `ry`.
+The full specification, including the face velocities, flux formulas and parallel design, is in [docs/design.md](docs/design.md).
 
 ## Planned implementations
 
@@ -77,9 +71,7 @@ The actual `--decomp` values will be `rows` or `2d`; `rows/2d` above denotes two
 
 | Path | Contents |
 | --- | --- |
-| [src/common/](src/common/README.md) | Planned configuration, grid, physics, stencil and output components. |
-| [src/serial/](src/serial/README.md) | Planned serial driver and solver. |
-| [src/parallel/](src/parallel/README.md) | Planned MPI driver, solver, decomposition and halo exchange. |
+| [src/](src/README.md) | Planned C++ sources: shared components (`common/`), serial solver (`serial/`) and MPI + OpenMP solver (`parallel/`). |
 | [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
 | [experiments/](experiments/README.md) | Planned correctness and performance experiment configurations. |
 | [scripts/](scripts/README.md) | Specifications for the tools to implement later. |
@@ -129,13 +121,13 @@ For a future serial-only build, also pass `-DHEAT2D_ENABLE_MPI=OFF`. A compiler 
 Serial:
 
 ```bash
-./build/heat_serial --nx 256 --ny 256 --steps 1000 --case heated_top --cfl 0.8 --output outputs/serial.csv
+./build/heat_serial --nx 256 --ny 256 --steps 1000 --case pigment_drop --cfl 0.8 --output outputs/serial.csv
 ```
 
 Parallel, with four MPI ranks and four threads per rank:
 
 ```bash
-OMP_NUM_THREADS=4 mpiexec -n 4 ./build/heat_parallel --nx 256 --ny 256 --steps 1000 --case heated_top --cfl 0.8 --decomp 2d --exchange overlap --output outputs/parallel.csv
+OMP_NUM_THREADS=4 mpiexec -n 4 ./build/heat_parallel --nx 256 --ny 256 --steps 1000 --case pigment_drop --cfl 0.8 --decomp 2d --exchange overlap --output outputs/parallel.csv
 ```
 
 These examples use a POSIX shell. Native Windows shell syntax differs. HPC runs must use the scheduler and launcher approved for Atlas or Vanda, with matching CPU allocations.
@@ -144,9 +136,9 @@ Additional planned options are documented in [config/README.md](config/README.md
 
 ## Validation and experiments
 
-- Compare full temperature fields from serial and parallel runs of the same problem.
-- Check constant temperature fields, fixed boundaries, non-divisible partitions and small local blocks.
-- Use a decaying sine field for an independent analytical check and mesh refinement study.
+- Compare full scalar fields from serial and parallel runs of the same problem.
+- Check mass conservation, constant fields under the flow, non-divisible partitions and small local blocks.
+- Use a decaying cosine mode (flow off) for an independent analytical check and mesh refinement study.
 - Measure strong scaling, weak scaling, rank/thread allocation and communication strategies.
 - Exclude file I/O and validation from solver-loop timing, and report them separately where useful.
 - Use the maximum elapsed time across MPI ranks as parallel runtime.

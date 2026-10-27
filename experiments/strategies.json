@@ -1,9 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "kind": "strategies",
   "defaults": "../config/defaults.json",
-  "description": "Explicit cross-product of resource layouts, decompositions and exchanges at 16 total CPU cores.",
-  "problem": {"nx": 4096, "ny": 4096, "steps": 1000},
+  "description": "Explicit cross-product of resource layouts, decompositions and exchanges at 16 total CPU cores. Same problem and flow as strong_scaling.json.",
+  "problem": {
+    "nx": 4096, "ny": 4096, "lx": 1.0, "ly": 1.0, "steps": 1000,
+    "kappa": 0.005,
+    "flow_amplitude": 0.1, "flow_epsilon": 0.25, "flow_period": 10.0,
+    "case": "pigment_drop", "background": 0.0, "amplitude": 1.0,
+    "blob_centre": [0.5, 0.5], "blob_width": 0.05
+  },
   "execution": {"backend": "parallel"},
   "total_cores": 16,
   "resources": [

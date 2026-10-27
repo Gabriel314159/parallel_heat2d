@@ -1,9 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "kind": "strong_scaling",
   "defaults": "../config/defaults.json",
-  "description": "Fixed global grid and steps; MPI-only scaling before fixed-core hybrid comparisons.",
-  "problem": {"nx": 4096, "ny": 4096, "steps": 1000},
+  "description": "Fixed global grid, steps and flow; MPI-only scaling before fixed-core hybrid comparisons. Same problem and flow as strategies.json.",
+  "problem": {
+    "nx": 4096, "ny": 4096, "lx": 1.0, "ly": 1.0, "steps": 1000,
+    "kappa": 0.005,
+    "flow_amplitude": 0.1, "flow_epsilon": 0.25, "flow_period": 10.0,
+    "case": "pigment_drop", "background": 0.0, "amplitude": 1.0,
+    "blob_centre": [0.5, 0.5], "blob_width": 0.05
+  },
   "execution": {"backend": "parallel"},
   "decomposition": "2d",
   "exchange": "blocking",

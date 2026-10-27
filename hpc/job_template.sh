@@ -26,5 +26,7 @@ mkdir -p logs
 
 "${MPI_LAUNCH_ARGS[@]}" ./build/heat_parallel \
     --nx 1024 --ny 1024 --steps 1000 \
-    --case heated_top --cfl 0.8 \
+    --kappa 0.005 --cfl 0.8 \
+    --flow-amplitude 0.1 --flow-epsilon 0.25 --flow-period 10 \
+    --case pigment_drop --blob-x 0.5 --blob-y 0.5 --blob-width 0.05 \
     --decomp 2d --exchange blocking

@@ -17,6 +17,7 @@ endif()
 
 set(HEAT2D_COMMON_SOURCES
     src/common/config.cpp
+    src/common/velocity.cpp
     src/common/physics.cpp
     src/common/io.cpp
 )
