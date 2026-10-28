@@ -21,6 +21,8 @@ add_library(heat2d_common STATIC
     src/common/config.cpp
     src/common/velocity.cpp
     src/common/physics.cpp
+    src/common/stability.cpp
+    src/common/flow.cpp
     src/common/io.cpp
 )
 target_include_directories(heat2d_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -86,7 +88,7 @@ endif()
 
 if(HEAT2D_BUILD_TESTS)
     enable_testing()
-    foreach(HEAT2D_TEST velocity config grid io)
+    foreach(HEAT2D_TEST velocity config grid io poisson flow)
         add_executable(test_${HEAT2D_TEST} tests/test_${HEAT2D_TEST}.cpp)
         target_link_libraries(test_${HEAT2D_TEST} PRIVATE heat2d_common)
         add_test(NAME ${HEAT2D_TEST} COMMAND test_${HEAT2D_TEST})
@@ -109,6 +111,14 @@ if(HEAT2D_BUILD_TESTS)
         # Serial vs parallel comparisons; needs up to 6 MPI ranks. Extra launcher
         # flags (e.g. --oversubscribe on a small machine) go in HEAT2D_MPIEXEC_FLAGS.
         if(TARGET heat_parallel AND MPIEXEC_EXECUTABLE)
+            add_executable(test_halo tests/test_halo.cpp src/parallel/decomposition.cpp src/parallel/halo.cpp)
+            target_link_libraries(test_halo PRIVATE heat2d_common MPI::MPI_CXX)
+            target_compile_options(test_halo PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+            foreach(HEAT2D_RANKS 1 4 6)
+                add_test(NAME halo_${HEAT2D_RANKS}_ranks
+                         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${HEAT2D_RANKS} ${HEAT2D_MPIEXEC_FLAGS}
+                                 $<TARGET_FILE:test_halo>)
+            endforeach()
             set(HEAT2D_MPIEXEC_FLAGS "" CACHE STRING "Extra flags for mpiexec in the parallel correctness test")
             add_test(NAME correctness_parallel
                      COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"

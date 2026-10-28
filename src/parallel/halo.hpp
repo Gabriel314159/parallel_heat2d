@@ -37,6 +37,12 @@ public:
     // Wait for all messages of start() and unpack the received columns.
     void finish(Field& c);
 
+    // Blocking, for the corner fields psi and zeta, whose stencils also read
+    // the diagonal neighbours: first the columns, then whole stored rows
+    // including their ghost columns, so that the values just received from the
+    // east and west neighbours travel on to the diagonal neighbours.
+    void exchange_with_corners(Field& c);
+
 private:
     void pack_columns(const Field& c);
     void unpack_columns(Field& c);
@@ -48,7 +54,8 @@ private:
     int east_;
     int ny_;
     int nx_;
-    MPI_Datatype rows_;  // `halo` rows of nx interior values, stride = field stride
+    MPI_Datatype rows_;       // `halo` rows of nx interior values, stride = field stride
+    MPI_Datatype full_rows_;  // `halo` whole stored rows, ghost columns included
     std::vector<double> send_west_;
     std::vector<double> send_east_;
     std::vector<double> recv_west_;

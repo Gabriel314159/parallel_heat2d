@@ -21,16 +21,20 @@ HaloExchange::HaloExchange(const ProcessLayout& layout, int ny, int nx)
       ny_(ny),
       nx_(nx),
       rows_(MPI_DATATYPE_NULL),
+      full_rows_(MPI_DATATYPE_NULL),
       send_west_(static_cast<std::size_t>(halo) * ny),
       send_east_(static_cast<std::size_t>(halo) * ny),
       recv_west_(static_cast<std::size_t>(halo) * ny),
       recv_east_(static_cast<std::size_t>(halo) * ny) {
     MPI_Type_vector(halo, nx_, nx_ + 2 * halo, MPI_DOUBLE, &rows_);
     MPI_Type_commit(&rows_);
+    MPI_Type_contiguous(halo * (nx_ + 2 * halo), MPI_DOUBLE, &full_rows_);
+    MPI_Type_commit(&full_rows_);
 }
 
 HaloExchange::~HaloExchange() {
     if (rows_ != MPI_DATATYPE_NULL) MPI_Type_free(&rows_);
+    if (full_rows_ != MPI_DATATYPE_NULL) MPI_Type_free(&full_rows_);
 }
 
 // Layer k = 1..halo counts inwards from the edge. The west buffer holds my
@@ -90,4 +94,19 @@ void HaloExchange::finish(Field& c) {
     MPI_Waitall(pending_, requests_, MPI_STATUSES_IGNORE);
     pending_ = 0;
     unpack_columns(c);
+}
+
+void HaloExchange::exchange_with_corners(Field& c) {
+    const int count = halo * ny_;
+    pack_columns(c);
+    MPI_Sendrecv(send_west_.data(), count, MPI_DOUBLE, west_, moving_west, recv_east_.data(), count, MPI_DOUBLE,
+                 east_, moving_west, comm_, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(send_east_.data(), count, MPI_DOUBLE, east_, moving_east, recv_west_.data(), count, MPI_DOUBLE,
+                 west_, moving_east, comm_, MPI_STATUS_IGNORE);
+    unpack_columns(c);
+    // Whole rows, from the first ghost column to the last.
+    MPI_Sendrecv(&c(1, 1 - halo), 1, full_rows_, north_, moving_north, &c(ny_ + 1, 1 - halo), 1, full_rows_, south_,
+                 moving_north, comm_, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(&c(ny_ - halo + 1, 1 - halo), 1, full_rows_, south_, moving_south, &c(1 - halo, 1 - halo), 1,
+                 full_rows_, north_, moving_south, comm_, MPI_STATUS_IGNORE);
 }

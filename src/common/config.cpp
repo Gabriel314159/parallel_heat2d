@@ -7,7 +7,7 @@
 #include <stdexcept>  // std::invalid_argument
 #include <string>
 
-constexpr double pi = M_PI;
+#include "common/stability.hpp"
 
 // An unnamed namespace makes these helpers private to this file: other files
 // cannot see or call them. Use it for small internal helper functions.
@@ -31,6 +31,12 @@ InitialCase parse_case(const std::string& name) {
     throw std::invalid_argument("unknown case: " + name);
 }
 
+Wind parse_wind(const std::string& name) {
+    if (name == "steady") return Wind::steady;
+    if (name == "periodic") return Wind::periodic;
+    throw std::invalid_argument("unknown wind: " + name + " (use steady or periodic)");
+}
+
 Decomp parse_decomp(const std::string& name) {
     if (name == "rows") return Decomp::rows;
     if (name == "2d") return Decomp::two_d;
@@ -49,40 +55,51 @@ std::string usage(const std::string& program) {
     return "Usage: " + program + " [options]\n"
         "\n"
         "Grid and time stepping\n"
-        "  --nx N, --ny N          cells along x and y (default 256 x 256)\n"
-        "  --lx L, --ly L          domain size (default 1 x 1)\n"
-        "  --steps N               number of time steps (default 10000)\n"
-        "  --kappa K               diffusivity (default 0.005)\n"
+        "  --nx N, --ny N          cells along x and y (default 256 x 512)\n"
+        "  --lx L, --ly L          basin size (default 1 x 2)\n"
+        "  --steps N               time steps after the pigment is released (default 50000)\n"
+        "  --kappa K               pigment diffusivity (default 1e-4)\n"
         "  --cfl C                 safety fraction of the stable dt, in (0, 1] (default 0.8)\n"
-        "  --dt DT                 explicit time step instead of --cfl\n"
+        "  --dt DT                 explicit time step instead of --cfl and --max-speed\n"
+        "  --max-speed U           estimated largest flow speed; sets the stable dt (default 2)\n"
+        "  --check-interval N      check the actual speeds every N steps; 0 = never (default 100)\n"
+        "  --poisson-tol TOL       Poisson solver (CG): stop at residual <= TOL x |rhs| (default 1e-10)\n"
+        "  --poisson-max-iter N    Poisson solver: give up after N iterations (default 20000)\n"
         "\n"
-        "Double-gyre flow\n"
-        "  --flow-amplitude A      flow strength; 0 switches the flow off (default 0.1)\n"
-        "  --flow-epsilon E        oscillation strength; 0 = steady (default 0.25)\n"
-        "  --flow-period T         oscillation period (default 10)\n"
+        "Wind-driven flow\n"
+        "  --viscosity NU          viscosity, > 0 (default 1e-3)\n"
+        "  --wind steady|periodic  F0 sin(2 pi y/ly), or F0 (1 + alpha sin(2 pi t/T)) sin(2 pi y/ly)\n"
+        "  --wind-amplitude F0     wind forcing amplitude; 0 = no wind (default 0.1)\n"
+        "  --wind-alpha A          oscillation strength of the periodic wind (default 0)\n"
+        "  --wind-period T         period of the periodic wind (default 1)\n"
+        "  --spinup T              flow-only time before the pigment is released (default 100)\n"
         "\n"
-        "Initial condition\n"
+        "Initial pigment\n"
         "  --case NAME             pigment_drop | constant | cosine_decay (default pigment_drop)\n"
         "  --background C0         background value (default 0)\n"
         "  --amplitude A0          blob / cosine amplitude (default 1)\n"
-        "  --blob-x X, --blob-y Y  blob centre (default 0.5, 0.5)\n"
+        "  --blob-x X, --blob-y Y  blob centre (default 0.2, 1.0)\n"
         "  --blob-width SIGMA      blob width (default 0.05)\n"
         "\n"
         "Output\n"
-        "  --output PATH           write the final field: PATH.csv as text, PATH.npy as binary;\n"
+        "  --output PATH           write the final pigment field: PATH.csv as text, PATH.npy as binary;\n"
         "                          the run summary goes next to it as .json\n"
-        "  --snapshot-interval N   write a snapshot every N steps (default 0 = off)\n"
+        "  --snapshot-interval N   write snapshots (pigment, psi, vorticity) every N steps (default 0 = off)\n"
         "  --snapshot-dir DIR      snapshot folder (default outputs/snapshots)\n"
-        "  --snapshot-coarsen K    average snapshots over K x K cells to keep them small (default 1)\n"
+        "  --snapshot-coarsen K    shrink snapshots by K in each direction (default 1)\n"
         "  -h, --help              show this help\n"
         "\n"
         "Parallel execution (heat_parallel only; threads per rank come from OMP_NUM_THREADS)\n"
         "  --decomp rows|2d        split rows only, or a 2D process grid (default rows)\n"
         "  --exchange blocking|overlap\n"
-        "                          blocking halo exchange, or nonblocking with computation\n"
+        "                          blocking pigment halo exchange, or nonblocking with computation\n"
         "                          of the interior while messages travel (default blocking)\n"
         "  --py N, --px N          process grid rows and columns for --decomp 2d\n"
         "                          (default: chosen automatically)\n";
+}
+
+std::string wind_name(Wind w) {
+    return w == Wind::steady ? "steady" : "periodic";
 }
 
 std::string decomp_name(Decomp d) {
@@ -129,9 +146,16 @@ Config parse_args(int argc, char** argv) {
         else if (flag == "--kappa") c.kappa = std::stod(value_after(k, argc, argv));
         else if (flag == "--cfl") c.cfl = std::stod(value_after(k, argc, argv));
         else if (flag == "--dt") c.dt = std::stod(value_after(k, argc, argv));
-        else if (flag == "--flow-amplitude") c.flow_amplitude = std::stod(value_after(k, argc, argv));
-        else if (flag == "--flow-epsilon") c.flow_epsilon = std::stod(value_after(k, argc, argv));
-        else if (flag == "--flow-period") c.flow_period = std::stod(value_after(k, argc, argv));
+        else if (flag == "--max-speed") c.max_speed = std::stod(value_after(k, argc, argv));
+        else if (flag == "--check-interval") c.check_interval = std::stoi(value_after(k, argc, argv));
+        else if (flag == "--poisson-tol") c.poisson_tol = std::stod(value_after(k, argc, argv));
+        else if (flag == "--poisson-max-iter") c.poisson_max_iter = std::stoi(value_after(k, argc, argv));
+        else if (flag == "--viscosity") c.viscosity = std::stod(value_after(k, argc, argv));
+        else if (flag == "--wind") c.wind = parse_wind(value_after(k, argc, argv));
+        else if (flag == "--wind-amplitude") c.wind_amplitude = std::stod(value_after(k, argc, argv));
+        else if (flag == "--wind-alpha") c.wind_alpha = std::stod(value_after(k, argc, argv));
+        else if (flag == "--wind-period") c.wind_period = std::stod(value_after(k, argc, argv));
+        else if (flag == "--spinup") c.spinup = std::stod(value_after(k, argc, argv));
         else if (flag == "--case") c.initial_case = parse_case(value_after(k, argc, argv));
         else if (flag == "--background") c.background = std::stod(value_after(k, argc, argv));
         else if (flag == "--amplitude") c.amplitude = std::stod(value_after(k, argc, argv));
@@ -152,9 +176,9 @@ Config parse_args(int argc, char** argv) {
 }
 
 void validate(const Config& c) {
-    // Worked example: one rule, one clear message.
-    if (c.nx <= 0 || c.ny <= 0) {
-        throw std::invalid_argument("nx and ny must be positive");
+    // At least one interior corner is needed for the flow.
+    if (c.nx < 2 || c.ny < 2) {
+        throw std::invalid_argument("nx and ny must be at least 2");
     }
     if (c.lx <= 0 || c.ly <= 0) {
         throw std::invalid_argument("lx and ly must be positive");
@@ -173,18 +197,34 @@ void validate(const Config& c) {
     if (c.dt && *c.dt <= 0) {
         throw std::invalid_argument("dt must be positive");
     }
-    if (c.flow_epsilon < 0) {
-        throw std::invalid_argument("flow_epsilon must be non-negative");
+    if (c.max_speed < 0) {
+        throw std::invalid_argument("max_speed must be non-negative");
     }
-    if (c.flow_period <= 0) {
-        throw std::invalid_argument("flow_period must be positive");
+    if (c.check_interval < 0) {
+        throw std::invalid_argument("check_interval must be non-negative");
+    }
+    if (c.poisson_tol <= 0 || c.poisson_tol >= 1) {
+        throw std::invalid_argument("poisson_tol must be in (0, 1)");
+    }
+    if (c.poisson_max_iter < 1) {
+        throw std::invalid_argument("poisson_max_iter must be at least 1");
+    }
+    // Viscosity is the only dissipation: without it the wind's energy has nowhere to go.
+    if (c.viscosity <= 0) {
+        throw std::invalid_argument("viscosity must be positive (it is the only dissipation)");
+    }
+    if (c.wind_period <= 0) {
+        throw std::invalid_argument("wind_period must be positive");
+    }
+    if (c.spinup < 0) {
+        throw std::invalid_argument("spinup must be non-negative");
     }
     if (c.blob_width <= 0) {
         throw std::invalid_argument("blob_width must be positive");
     }
-    // cosine_decay is the zero-flow analytic reference.
-    if (c.initial_case == InitialCase::cosine_decay && c.flow_amplitude != 0) {
-        throw std::invalid_argument("cosine_decay requires flow_amplitude = 0");
+    // cosine_decay is the zero-flow analytic reference: no wind keeps the flow at rest.
+    if (c.initial_case == InitialCase::cosine_decay && c.wind_amplitude != 0) {
+        throw std::invalid_argument("cosine_decay requires wind_amplitude = 0");
     }
     if (c.snapshot_interval < 0) {
         throw std::invalid_argument("snapshot_interval must be non-negative");
@@ -213,45 +253,30 @@ void validate(const Config& c) {
     }
 }
 
-FlowParams flow_params(const Config& c) {
-    const double omega = 2 * pi / c.flow_period;
-    return FlowParams{c.flow_amplitude, c.flow_epsilon, omega, c.lx, c.ly};
-}
-
 double time_step(const Config& c) {
-    // docs/design.md, "Time step": dt (a + d) <= 1 with
-    //   a = u_max/dx + v_max/dy,  d = 2 kappa (1/dx^2 + 1/dy^2).
-    const double dx = c.lx / c.nx;
-    const double dy = c.ly / c.ny;
-
-    // max_speed_u takes a FlowParams, so build one first.
-    const FlowParams p = flow_params(c);
-    const double u_max = max_speed_u(p);
-    const double v_max = max_speed_v(p);
-
-    const double a = u_max / dx + v_max / dy;
-    const double d = 2 * c.kappa * (1 / (dx * dx) + 1 / (dy * dy));
-
+    // docs/design.md, "Time step": the step must satisfy every stability limit
+    // for the largest speed we expect, max_speed.
+    const double largest = stable_dt(c, c.max_speed, c.max_speed);
     if (c.dt) {
-        if (*c.dt * (a + d) > 1) {
-            throw std::invalid_argument("dt = " + std::to_string(*c.dt) +
-                                        " is unstable; the limit is " + std::to_string(1 / (a + d)));
+        if (*c.dt > largest) {
+            throw std::invalid_argument("dt = " + std::to_string(*c.dt) + " is unstable for --max-speed " +
+                                        std::to_string(c.max_speed) + "; the limit is " + std::to_string(largest));
         }
         return *c.dt;
     }
-    return c.cfl / (a + d);
+    return c.cfl * largest;
+}
+
+int spinup_steps(const Config& c, double dt) {
+    return static_cast<int>(std::lround(c.spinup / dt));
 }
 
 double peclet(const Config& c) {
-    const FlowParams p = flow_params(c);
-    const double speed = std::max(max_speed_u(p), max_speed_v(p));
-    const double length = std::max(c.lx, c.ly);
-    return speed * length / c.kappa;
+    return c.max_speed * std::max(c.lx, c.ly) / c.kappa;
 }
 
-double peclet_grid(const Config& c) {
-    const FlowParams p = flow_params(c);
+double peclet_grid(const Config& c, double speed) {
     const double dx = c.lx / c.nx;
     const double dy = c.ly / c.ny;
-    return std::max(max_speed_u(p) * dx, max_speed_v(p) * dy) / c.kappa;
+    return speed * std::max(dx, dy) / c.kappa;
 }

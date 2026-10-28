@@ -66,9 +66,14 @@ void add_config(JsonObject& json, const Config& c) {
     json.add("steps", c.steps);
     json.add("kappa", c.kappa);
     json.add("cfl", c.cfl);
-    json.add("flow_amplitude", c.flow_amplitude);
-    json.add("flow_epsilon", c.flow_epsilon);
-    json.add("flow_period", c.flow_period);
+    json.add("max_speed", c.max_speed);
+    json.add("poisson_tol", c.poisson_tol);
+    json.add("viscosity", c.viscosity);
+    json.add("wind", wind_name(c.wind));
+    json.add("wind_amplitude", c.wind_amplitude);
+    json.add("wind_alpha", c.wind_alpha);
+    json.add("wind_period", c.wind_period);
+    json.add("spinup", c.spinup);
     json.add("case", case_name(c.initial_case));
     json.add("background", c.background);
     json.add("amplitude", c.amplitude);
@@ -105,6 +110,8 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("solver", s.solver);
     add_config(json, c);
     json.add("dt", s.dt);
+    json.add("spinup_steps", s.spinup_steps);
+    json.add("t_release", s.t_release);
     json.add("t_end", s.t_end);
     json.add("mpi_ranks", s.mpi_ranks);
     json.add("omp_threads", s.omp_threads);
@@ -113,12 +120,20 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("py", s.py);
     json.add("px", s.px);
     json.add("elapsed_s", s.elapsed_s);
+    json.add("spinup_s", s.spinup_s);
+    json.add("poisson_s", s.poisson_s);
+    json.add("poisson_iterations_mean", s.flow_steps > 0 ? static_cast<double>(s.poisson_iterations) / s.flow_steps : 0.0);
+    json.add("poisson_iterations_max", s.poisson_iterations_max);
     json.add("snapshot_s", s.snapshot_s);
     const double updates = static_cast<double>(c.nx) * c.ny * c.steps;
     json.add("cell_updates_per_s", s.elapsed_s > 0 ? updates / s.elapsed_s : 0.0);
     json.add("mass_initial", s.mass_initial);
     json.add("mass_final", s.mass_final);
     json.add("mass_error", s.mass_error);
+    json.add("energy", s.energy);
+    json.add("enstrophy", s.enstrophy);
+    json.add("u_max_measured", s.u_max_measured);
+    json.add("v_max_measured", s.v_max_measured);
     json.add("peclet", s.peclet);
     json.add("peclet_grid", s.peclet_grid);
     json.add("cosine_discrete_error", s.cosine_discrete_error);
@@ -131,16 +146,24 @@ std::string summary_json(const Config& c, const RunSummary& s) {
 
 void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
     const double updates = static_cast<double>(c.nx) * c.ny * c.steps;
-    out << s.solver << ": " << c.nx << " x " << c.ny << " cells, " << c.steps << " steps, case "
-        << case_name(c.initial_case) << "\n"
-        << "  dt = " << s.dt << ", final time = " << s.t_end << "\n"
-        << "  flow A = " << c.flow_amplitude << ", epsilon = " << c.flow_epsilon << ", period = " << c.flow_period
-        << ", kappa = " << c.kappa << "\n"
-        << "  Peclet = " << s.peclet << ", grid Peclet = " << s.peclet_grid << "\n"
+    out << s.solver << ": " << c.nx << " x " << c.ny << " cells, " << s.spinup_steps << " spin-up + " << c.steps
+        << " steps, case " << case_name(c.initial_case) << "\n"
+        << "  dt = " << s.dt << ", pigment released at t = " << s.t_release << ", final time = " << s.t_end << "\n"
+        << "  flow: viscosity = " << c.viscosity << ", wind " << wind_name(c.wind)
+        << " F0 = " << c.wind_amplitude;
+    if (c.wind == Wind::periodic) out << ", alpha = " << c.wind_alpha << ", period = " << c.wind_period;
+    out << "\n  largest measured speeds: u = " << s.u_max_measured << ", v = " << s.v_max_measured
+        << " (estimate --max-speed " << c.max_speed << ")\n"
+        << "  energy = " << s.energy << ", enstrophy = " << s.enstrophy << "\n"
+        << "  pigment: kappa = " << c.kappa << ", Peclet = " << s.peclet << ", grid Peclet = " << s.peclet_grid << "\n"
         << "  solver loop: " << s.elapsed_s << " s ("
         << (s.elapsed_s > 0 ? updates / s.elapsed_s : 0.0) << " cell updates/s)";
+    if (s.spinup_s > 0) out << ", spin-up: " << s.spinup_s << " s";
+    out << ", of which Poisson: " << s.poisson_s << " s ("
+        << (s.flow_steps > 0 ? static_cast<double>(s.poisson_iterations) / s.flow_steps : 0.0)
+        << " CG iterations per step on average, at most " << s.poisson_iterations_max << ")";
     if (s.snapshot_s > 0) out << ", snapshots: " << s.snapshot_s << " s";
-    out << "\n  mass: initial " << s.mass_initial << ", final " << s.mass_final
+    out << "\n  pigment mass: initial " << s.mass_initial << ", final " << s.mass_final
         << ", relative change " << s.mass_error << "\n";
     if (std::isfinite(s.cosine_discrete_error)) {
         out << "  cosine_decay error: vs exact discrete " << s.cosine_discrete_error << ", vs continuous "
@@ -155,6 +178,26 @@ std::vector<double> copy_interior(const Field& field) {
     for (int i = 1; i <= field.ny(); ++i) {
         const double* row = field.row(i);
         values.insert(values.end(), row + 1, row + 1 + field.nx());
+    }
+    return values;
+}
+
+std::vector<double> copy_corners(const Field& field) {
+    std::vector<double> values;
+    values.reserve(static_cast<std::size_t>(field.ny() + 1) * static_cast<std::size_t>(field.nx() + 1));
+    for (int i = 0; i <= field.ny(); ++i) {
+        const double* row = field.row(i);
+        values.insert(values.end(), row, row + field.nx() + 1);
+    }
+    return values;
+}
+
+std::vector<double> corners_from_entries(const std::vector<double>& entries, int ny, int nx) {
+    std::vector<double> values(static_cast<std::size_t>(ny + 1) * static_cast<std::size_t>(nx + 1), 0.0);
+    for (int i = 1; i <= ny; ++i) {
+        for (int j = 1; j <= nx; ++j) {
+            values[static_cast<std::size_t>(i) * (nx + 1) + j] = entries[static_cast<std::size_t>(i - 1) * nx + (j - 1)];
+        }
     }
     return values;
 }
@@ -245,14 +288,27 @@ std::vector<double> coarsen_field(const std::vector<double>& values, int ny, int
     return coarse;
 }
 
-SnapshotWriter::SnapshotWriter(const Config& c, double dt, const std::string& solver)
-    : dir_(c.snapshot_dir), dt_(dt), ny_(c.ny), nx_(c.nx), coarsen_(c.snapshot_coarsen) {
+std::vector<double> subsample_corners(const std::vector<double>& values, int ny, int nx, int k) {
+    if (k < 1 || ny % k != 0 || nx % k != 0) {
+        throw std::invalid_argument("subsample_corners: k must divide ny and nx");
+    }
+    std::vector<double> out;
+    out.reserve(static_cast<std::size_t>(ny / k + 1) * static_cast<std::size_t>(nx / k + 1));
+    for (int i = 0; i <= ny; i += k) {
+        for (int j = 0; j <= nx; j += k) out.push_back(values[static_cast<std::size_t>(i) * (nx + 1) + j]);
+    }
+    return out;
+}
+
+SnapshotWriter::SnapshotWriter(const Config& c, double dt, double t_release, const std::string& solver)
+    : dir_(c.snapshot_dir), ny_(c.ny), nx_(c.nx), coarsen_(c.snapshot_coarsen) {
     std::filesystem::create_directories(dir_);
 
     JsonObject meta;
     meta.add("solver", solver);
     add_config(meta, c);
     meta.add("dt", dt);
+    meta.add("t_release", t_release);
     meta.add("snapshot_interval", c.snapshot_interval);
     meta.add("snapshot_coarsen", coarsen_);
     meta.add("snapshot_ny", ny_ / coarsen_);
@@ -260,18 +316,27 @@ SnapshotWriter::SnapshotWriter(const Config& c, double dt, const std::string& so
     write_text_file(dir_ + "/meta.json", meta.str() + "\n");
 
     index_ = open_for_writing(dir_ + "/index.csv");
-    index_ << "step,time,mass,file\n";
+    index_ << "step,time,mass,energy,enstrophy,file,psi_file,vort_file\n";
 }
 
-void SnapshotWriter::write(int step, const std::vector<double>& values, double mass) {
-    char name[32];
-    std::snprintf(name, sizeof name, "field_%06d.npy", step);
-    if (coarsen_ > 1) {
-        write_field_npy(dir_ + "/" + name, coarsen_field(values, ny_, nx_, coarsen_), ny_ / coarsen_, nx_ / coarsen_);
+void SnapshotWriter::write(const Snapshot& s) {
+    char suffix[32];
+    std::snprintf(suffix, sizeof suffix, "%06d.npy", s.step);
+    const std::string field_name = std::string("field_") + suffix;
+    const std::string psi_name = std::string("psi_") + suffix;
+    const std::string vort_name = std::string("vort_") + suffix;
+    const int k = coarsen_;
+    if (k > 1) {
+        write_field_npy(dir_ + "/" + field_name, coarsen_field(s.pigment, ny_, nx_, k), ny_ / k, nx_ / k);
+        write_field_npy(dir_ + "/" + psi_name, subsample_corners(s.psi, ny_, nx_, k), ny_ / k + 1, nx_ / k + 1);
+        write_field_npy(dir_ + "/" + vort_name, subsample_corners(s.zeta, ny_, nx_, k), ny_ / k + 1, nx_ / k + 1);
     } else {
-        write_field_npy(dir_ + "/" + name, values, ny_, nx_);
+        write_field_npy(dir_ + "/" + field_name, s.pigment, ny_, nx_);
+        write_field_npy(dir_ + "/" + psi_name, s.psi, ny_ + 1, nx_ + 1);
+        write_field_npy(dir_ + "/" + vort_name, s.zeta, ny_ + 1, nx_ + 1);
     }
-    index_ << step << ',' << std::setprecision(17) << step * dt_ << ',' << mass << ',' << name << '\n';
+    index_ << s.step << ',' << std::setprecision(17) << s.time << ',' << s.mass << ',' << s.energy << ','
+           << s.enstrophy << ',' << field_name << ',' << psi_name << ',' << vort_name << '\n';
     index_.flush();
     if (!index_) throw std::runtime_error("error while writing " + dir_ + "/index.csv");
 }

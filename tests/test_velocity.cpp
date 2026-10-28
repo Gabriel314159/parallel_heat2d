@@ -2,6 +2,10 @@
 
 #include "common/velocity.hpp"
 
+#include "common/corners.hpp"
+#include "common/flow.hpp"
+#include "common/grid.hpp"
+
 #include <algorithm>  // std::max
 #include <cmath>
 #include <iostream>
@@ -61,15 +65,16 @@ int main() {
              && max_wall < 1e-12 && max_v > 0.0;
     }
 
-    // FlowField (the fast fill used by the solvers) must agree exactly with the
-    // per-face functions above on interior faces, and be exactly 0 on walls.
-    // Check the whole grid and a sub-block with offsets, as a parallel rank sees it.
+    // faces_from_psi (used by the solvers) applies the same face formulas to psi
+    // stored at the corners. With psi sampled from the analytic streamfunction,
+    // it must reproduce the per-face functions above exactly, on the whole grid
+    // and on a sub-block with offsets, as a parallel rank sees it.
     {
         const double t = 2.5;
         Block whole;
         whole.ny = ny;
         whole.nx = nx;
-        Block part;  // rows 11..20, columns 6..17 of the global grid, walls nowhere
+        Block part;  // rows 11..20, columns 6..17 of the global grid
         part.ny = 10;
         part.nx = 12;
         part.row_offset = 10;
@@ -77,35 +82,30 @@ int main() {
         part.wall_top = part.wall_bottom = part.wall_left = part.wall_right = false;
 
         for (const Block& b : {whole, part}) {
-            FlowField flow(p, b, dx, dy);
-            flow.set_time(t);
+            Field psi(b.ny, b.nx);
+            for (int i = 0; i <= b.ny; ++i) {
+                for (int j = 0; j <= b.nx; ++j) {
+                    psi(i, j) = streamfunction(p, corner_x(b.col_offset + j, dx), corner_y(b.row_offset + i, dy, p.ly), t);
+                }
+            }
             FaceVelocities vel(b.ny, b.nx);
-            flow.fill_all(vel);
+            faces_from_psi(psi, vel, dx, dy);
 
             bool exact = true;
             for (int i = 1; i <= b.ny; ++i) {
                 for (int j = 0; j <= b.nx; ++j) {
-                    const bool wall = (j == 0 && b.wall_left) || (j == b.nx && b.wall_right);
-                    const double expected =
-                        wall ? 0.0 : face_velocity_east(p, b.row_offset + i, b.col_offset + j, dx, dy, t);
-                    exact = exact && vel.east(i, j) == expected;
+                    exact = exact && vel.east(i, j) == face_velocity_east(p, b.row_offset + i, b.col_offset + j, dx, dy, t);
                 }
             }
             for (int i = 1; i <= b.ny + 1; ++i) {
                 for (int j = 1; j <= b.nx; ++j) {
-                    const bool wall = (i == 1 && b.wall_top) || (i == b.ny + 1 && b.wall_bottom);
-                    const double expected =
-                        wall ? 0.0 : face_velocity_north(p, b.row_offset + i, b.col_offset + j, dx, dy, t);
-                    exact = exact && vel.north(i, j) == expected;
+                    exact = exact && vel.north(i, j) == face_velocity_north(p, b.row_offset + i, b.col_offset + j, dx, dy, t);
                 }
             }
-            std::cout << "FlowField on " << b.ny << " x " << b.nx << " block at (" << b.row_offset << ", "
+            std::cout << "faces_from_psi on " << b.ny << " x " << b.nx << " block at (" << b.row_offset << ", "
                       << b.col_offset << "): " << (exact ? "matches exactly" : "MISMATCH") << "\n";
             ok = ok && exact;
         }
-        FlowField steady_flow(FlowParams{0.1, 0.0, p.omega, p.lx, p.ly}, whole, dx, dy);
-        FlowField no_flow(FlowParams{0.0, 0.25, p.omega, p.lx, p.ly}, whole, dx, dy);
-        ok = ok && steady_flow.steady() && no_flow.steady() && !FlowField(p, whole, dx, dy).steady();
     }
 
     std::cout << "\n" << (ok ? "PASS" : "FAIL") << "\n";
