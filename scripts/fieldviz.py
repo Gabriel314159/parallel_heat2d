@@ -1,12 +1,14 @@
 """Shared helpers for plot_field.py and animate_field.py (needs numpy and matplotlib).
 
 Reads the solver's output formats (src/common/io.hpp):
-  - a final field CSV plus its .json summary next to it,
-  - a snapshot folder: meta.json, index.csv and field_NNNNNN.npy files.
+  - a final pigment field (CSV or .npy) plus its .json summary next to it,
+  - a snapshot folder: meta.json, index.csv and, per snapshot, the pigment
+    (field_NNNNNN.npy, cell values) and the streamfunction and vorticity
+    (psi_NNNNNN.npy, vort_NNNNNN.npy, on the cell corners, walls included).
 
 Colour: a single-hue sequential scale (near-white = no pigment, dark blue =
 concentrated) for non-negative fields, and a blue/red diverging scale with a
-neutral grey at zero for signed fields such as cosine_decay.
+neutral grey at zero for signed fields such as the vorticity.
 """
 
 from __future__ import annotations
@@ -28,7 +30,10 @@ SEQUENTIAL = LinearSegmentedColormap.from_list(
     "pigment", [SURFACE, "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"])
 DIVERGING = LinearSegmentedColormap.from_list(
     "signed", ["#104281", "#2a78d6", "#86b6ef", "#f0efec", "#f1a3a2", "#e34948", "#9c2b2b"])
-STREAMLINE_COLOR = INK_SECONDARY
+OVERLAY_COLOR = INK_SECONDARY
+
+FIELD_PREFIX = {"pigment": "field_", "vorticity": "vort_", "psi": "psi_"}
+FIELD_LABEL = {"pigment": "concentration c", "vorticity": "vorticity ζ", "psi": "streamfunction ψ"}
 
 
 def load_field(path: str | Path) -> np.ndarray:
@@ -39,7 +44,7 @@ def load_field(path: str | Path) -> np.ndarray:
 
 
 def load_metadata(field_path: str | Path) -> dict:
-    """The run summary next to a field CSV, or meta.json of a snapshot folder."""
+    """The run summary next to a field file, or meta.json of a snapshot folder."""
     field_path = Path(field_path)
     for candidate in (field_path.with_suffix(".json"), field_path.parent / "meta.json"):
         if candidate.is_file():
@@ -49,9 +54,29 @@ def load_metadata(field_path: str | Path) -> dict:
 
 
 def read_snapshot_index(folder: str | Path) -> list[dict]:
-    with open(Path(folder) / "index.csv", newline="") as handle:
-        return [{"step": int(row["step"]), "time": float(row["time"]), "mass": float(row["mass"]),
-                 "file": Path(folder) / row["file"]} for row in csv.DictReader(handle)]
+    """One dict per snapshot: step, time, mass, energy, enstrophy and the paths of its files."""
+    folder = Path(folder)
+    rows = []
+    with open(folder / "index.csv", newline="") as handle:
+        for row in csv.DictReader(handle):
+            entry = {"step": int(row["step"]), "time": float(row["time"]), "mass": float(row["mass"])}
+            for key in ("energy", "enstrophy"):
+                if key in row:
+                    entry[key] = float(row[key])
+            entry["pigment"] = folder / row["file"]
+            if "psi_file" in row:
+                entry["psi"] = folder / row["psi_file"]
+                entry["vorticity"] = folder / row["vort_file"]
+            rows.append(entry)
+    return rows
+
+
+def companion(path: Path, kind: str) -> Path:
+    """The snapshot file of another kind with the same step, e.g. psi_000100.npy for field_000100.npy."""
+    for prefix in FIELD_PREFIX.values():
+        if path.name.startswith(prefix):
+            return path.with_name(FIELD_PREFIX[kind] + path.name[len(prefix):])
+    raise ValueError(f"{path.name} is not a snapshot file")
 
 
 def make_norm(vmin: float, vmax: float, gamma: float = 1.0):
@@ -64,30 +89,6 @@ def make_norm(vmin: float, vmax: float, gamma: float = 1.0):
     if gamma != 1.0:
         return PowerNorm(gamma=gamma, vmin=vmin, vmax=vmax), SEQUENTIAL
     return Normalize(vmin=vmin, vmax=vmax), SEQUENTIAL
-
-
-def velocity_on_grid(meta: dict, t: float, points: int = 40):
-    """Analytic double-gyre velocity on an evenly spaced grid (y increasing), for overlays.
-
-    psi = A sin(pi f(X, t)) sin(pi Y),  X = 2x/lx, Y = y/ly,  f = X + eps sin(wt)(X^2 - 2X)
-    u = dpsi/dy,  v = -dpsi/dx   (docs/design.md, "Model").
-    """
-    lx, ly = meta["lx"], meta["ly"]
-    amplitude, eps = meta["flow_amplitude"], meta["flow_epsilon"]
-    omega = 2 * np.pi / meta["flow_period"]
-    nx = max(8, int(round(points * lx / max(lx, ly))))
-    ny = max(8, int(round(points * ly / max(lx, ly))))
-    x = np.linspace(0, lx, nx)
-    y = np.linspace(0, ly, ny)
-    xx, yy = np.meshgrid(x, y)
-    X = 2 * xx / lx
-    Y = yy / ly
-    s = eps * np.sin(omega * t)
-    f = X + s * (X * X - 2 * X)
-    df_dX = 1 + s * (2 * X - 2)
-    u = amplitude * np.sin(np.pi * f) * (np.pi / ly) * np.cos(np.pi * Y)
-    v = -amplitude * np.pi * np.cos(np.pi * f) * df_dX * (2 / lx) * np.sin(np.pi * Y)
-    return x, y, u, v
 
 
 def style_axes(ax) -> None:
@@ -108,51 +109,50 @@ def style_colorbar(colorbar, label: str) -> None:
 
 
 def draw_field(ax, field: np.ndarray, meta: dict, norm, cmap):
-    """The field as cells on its physical extent; row 0 of the array is the top (y = ly)."""
+    """Cell values (pigment) or corner values (psi, vorticity) on the basin; row 0 is the top (y = ly)."""
     return ax.imshow(field, extent=(0, meta["lx"], 0, meta["ly"]), origin="upper", cmap=cmap, norm=norm,
-                     interpolation="nearest")
+                     interpolation="nearest" if field.shape[0] > 64 else "bilinear")
 
 
-def draw_velocity(ax, meta: dict, t: float, style: str):
-    """Streamlines or arrows of the flow at time t.
+def draw_flow(ax, psi: np.ndarray | None, meta: dict, style: str):
+    """Streamlines (contours of psi) or arrows of the flow, from a psi snapshot on the corners.
 
-    Returns every artist the overlay added, so an animation can remove them
-    before drawing the next frame (streamplot adds its arrows as separate patches).
+    Returns every artist added, so that an animation can remove them before the next frame.
     """
-    if style == "none" or meta.get("flow_amplitude", 0) == 0:
+    if style == "none" or psi is None or not np.any(psi):
         return []
     before = set(ax.get_children())
-    x, y, u, v = velocity_on_grid(meta, t, points=40 if style == "streamlines" else 20)
+    ny, nx = psi.shape[0] - 1, psi.shape[1] - 1
+    x = np.linspace(0, meta["lx"], nx + 1)
+    y = np.linspace(0, meta["ly"], ny + 1)
+    up = psi[::-1]  # rows from y = 0 upwards
     if style == "streamlines":
-        ax.streamplot(x, y, u, v, color=STREAMLINE_COLOR, linewidth=0.5, density=0.7, arrowsize=0.6,
-                      broken_streamlines=False)
+        span = np.max(np.abs(up))
+        levels = np.linspace(-span, span, 22)[1:-1]
+        ax.contour(x, y, up, levels=levels, colors=OVERLAY_COLOR, linewidths=0.6, linestyles="solid")
     elif style == "arrows":
+        u = np.gradient(up, y, axis=0)    # u = dpsi/dy
+        v = -np.gradient(up, x, axis=1)   # v = -dpsi/dx
+        step = max(1, nx // 20)
         speed = float(np.max(np.hypot(u, v))) or 1.0
-        ax.quiver(x, y, u, v, color=STREAMLINE_COLOR, width=0.0025, scale_units="xy", angles="xy",
-                  scale=speed / (0.6 * (x[1] - x[0])))
+        ax.quiver(x[::step], y[::step], u[::step, ::step], v[::step, ::step], color=OVERLAY_COLOR,
+                  width=0.0025, scale_units="xy", angles="xy", scale=speed / (0.9 * step * (x[1] - x[0])))
     else:
-        raise ValueError(f"unknown velocity style: {style}")
+        raise ValueError(f"unknown flow style: {style}")
     added = [artist for artist in ax.get_children() if artist not in before]
     for artist in added:
-        artist.set_alpha(0.3)
+        artist.set_alpha(0.35)
     return added
 
 
-def title_text(t: float, step: int | None = None, mass: float | None = None) -> str:
-    parts = [f"t = {t:.3f}"]
-    if step is not None:
-        parts.append(f"step {step}")
-    if mass is not None:
-        parts.append(f"total mass {mass:.6g}")
-    return "   ".join(parts)
-
-
 def subtitle_text(meta: dict) -> str:
-    """Two short lines: the run, then the physics parameters."""
+    """Two short lines: the run, then the flow parameters."""
     grid = f"{meta['nx']} x {meta['ny']} cells"
     coarsen = meta.get("snapshot_coarsen", 1)
     if coarsen > 1:
-        grid += f", shown as {coarsen} x {coarsen} block averages"
+        grid += f", shown {coarsen}x coarser"
+    wind = f"wind {meta['wind']} F0 = {meta['wind_amplitude']:g}"
+    if meta.get("wind") == "periodic":
+        wind += f", alpha = {meta['wind_alpha']:g}, period = {meta['wind_period']:g}"
     return (f"{meta['case']}, {grid}\n"
-            f"kappa = {meta['kappa']:g}, double gyre A = {meta['flow_amplitude']:g}, "
-            f"eps = {meta['flow_epsilon']:g}, period = {meta['flow_period']:g}")
+            f"viscosity = {meta['viscosity']:g}, {wind}, kappa = {meta['kappa']:g}")
