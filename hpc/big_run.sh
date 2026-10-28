@@ -3,11 +3,13 @@
 #
 # Uses heat_parallel with RANKS MPI ranks x THREADS OpenMP threads, or
 # heat_serial when RANKS=1 and THREADS=1. All settings come from the
-# environment; the defaults are 2048 x 2048 cells for two flow periods.
+# environment. The defaults: the 1 x 2 basin on 512 x 1024 cells with the
+# default flow (viscosity 1e-3, wind 0.1), a spin-up of 100, then about 40
+# time units with the pigment (dt is about 2e-4), 100 snapshots.
 #
 #   HEAT2D_REPO=$PWD RANKS=16 bash hpc/big_run.sh
-#   HEAT2D_REPO=$PWD RANKS=4 THREADS=4 NX=4096 KAPPA=0.000125 STEPS=338400 \
-#       INTERVAL=3384 COARSEN=8 bash hpc/big_run.sh
+#   HEAT2D_REPO=$PWD RANKS=16 NX=1024 VISCOSITY=0.00025 WIND=0.05 MAXSPEED=3 \
+#       SPINUP=300 STEPS=600000 INTERVAL=6000 COARSEN=4 bash hpc/big_run.sh
 #
 # On a cluster, add the scheduler directives for the platform here and set
 # LAUNCHER to its approved launcher. For Slurm they look like the lines below;
@@ -25,11 +27,16 @@ set -euo pipefail
 : "${HEAT2D_REPO:?Set HEAT2D_REPO to the repository path, e.g. HEAT2D_REPO=\$PWD}"
 cd "$HEAT2D_REPO"
 
-NX="${NX:-2048}"
-KAPPA="${KAPPA:-0.00025}"
-STEPS="${STEPS:-169200}"
-INTERVAL="${INTERVAL:-1692}"   # steps between snapshots
-COARSEN="${COARSEN:-4}"        # snapshots as COARSEN x COARSEN block averages
+NX="${NX:-512}"                 # cells along x; the basin has 2 * NX cells along y
+VISCOSITY="${VISCOSITY:-0.001}"
+WIND="${WIND:-0.1}"             # wind amplitude F0
+MAXSPEED="${MAXSPEED:-2}"       # speed estimate that sets dt
+SPINUP="${SPINUP:-100}"
+KAPPA="${KAPPA:-0.0001}"
+STEPS="${STEPS:-200000}"
+INTERVAL="${INTERVAL:-2000}"    # steps between snapshots
+COARSEN="${COARSEN:-2}"         # snapshots shrunk COARSEN times in each direction
+EXTRA="${EXTRA:-}"              # any further solver flags, e.g. "--wind periodic --wind-alpha 1.5 --wind-period 20"
 RANKS="${RANKS:-1}"
 THREADS="${THREADS:-1}"
 DECOMP="${DECOMP:-2d}"
@@ -37,9 +44,11 @@ EXCHANGE="${EXCHANGE:-overlap}"
 LAUNCHER="${LAUNCHER:-mpiexec -n}"
 RUN_DIR="${RUN_DIR:-outputs/run${NX}}"
 
-PROBLEM=(--nx "$NX" --ny "$NX" --kappa "$KAPPA" --steps "$STEPS"
+read -r -a EXTRA_ARGS <<< "$EXTRA"
+PROBLEM=(--nx "$NX" --ny "$((2 * NX))" --viscosity "$VISCOSITY" --wind-amplitude "$WIND" --max-speed "$MAXSPEED"
+         --spinup "$SPINUP" --kappa "$KAPPA" --steps "$STEPS"
          --snapshot-interval "$INTERVAL" --snapshot-coarsen "$COARSEN" --snapshot-dir "$RUN_DIR"
-         --output "$RUN_DIR/final.npy")
+         --output "$RUN_DIR/final.npy" "${EXTRA_ARGS[@]}")
 
 if [[ "$RANKS" == 1 && "$THREADS" == 1 ]]; then
     COMMAND=(./build/heat_serial "${PROBLEM[@]}")
@@ -59,6 +68,6 @@ fi
 
 export OMP_NUM_THREADS="$THREADS"
 mkdir -p "$RUN_DIR"
-echo "${NX} x ${NX}, kappa ${KAPPA}, ${STEPS} steps, ${RANKS} ranks x ${THREADS} threads -> ${RUN_DIR}"
+echo "${NX} x $((2 * NX)), viscosity ${VISCOSITY}, wind ${WIND}, ${STEPS} steps, ${RANKS} ranks x ${THREADS} threads -> ${RUN_DIR}"
 echo "${COMMAND[*]}"
 "${COMMAND[@]}" | tee "$RUN_DIR/report.txt"

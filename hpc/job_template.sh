@@ -24,9 +24,11 @@ fi
 export OMP_NUM_THREADS
 mkdir -p logs
 
+# Example values only: choose the grid and steps from experiments/*.json.
+# --spinup 0 starts the flow at rest, so every run does the same work.
 "${MPI_LAUNCH_ARGS[@]}" ./build/heat_parallel \
-    --nx 1024 --ny 1024 --steps 1000 \
-    --kappa 0.005 --cfl 0.8 \
-    --flow-amplitude 0.1 --flow-epsilon 0.25 --flow-period 10 \
-    --case pigment_drop --blob-x 0.5 --blob-y 0.5 --blob-width 0.05 \
+    --nx 512 --ny 1024 --steps 200 --spinup 0 \
+    --kappa 0.0001 --cfl 0.8 --max-speed 2 \
+    --viscosity 0.001 --wind steady --wind-amplitude 0.1 \
+    --case pigment_drop --blob-x 0.2 --blob-y 1.0 --blob-width 0.05 \
     --decomp 2d --exchange blocking

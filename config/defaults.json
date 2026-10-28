@@ -1,21 +1,29 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "problem": {
     "nx": 256,
-    "ny": 256,
+    "ny": 512,
     "lx": 1.0,
-    "ly": 1.0,
-    "steps": 10000,
-    "kappa": 0.005,
+    "ly": 2.0,
+    "steps": 50000,
+    "kappa": 0.0001,
     "cfl": 0.8,
     "dt": null,
-    "flow_amplitude": 0.1, 
-    "flow_epsilon": 0.25,
-    "flow_period": 10.0,
+    "max_speed": 2.0,
+    "check_interval": 100,
+    "viscosity": 0.001,
+    "wind": "steady",
+    "wind_amplitude": 0.1,
+    "wind_alpha": 0.0,
+    "wind_period": 1.0,
+    "spinup": 100.0,
     "case": "pigment_drop",
     "background": 0.0,
     "amplitude": 1.0,
-    "blob_centre": [0.5, 0.5],
+    "blob_centre": [
+      0.2,
+      1.0
+    ],
     "blob_width": 0.05
   },
   "execution": {
