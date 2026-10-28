@@ -7,39 +7,47 @@ The solvers take command-line flags: the CLI column below, also listed by `heat_
 | JSON field | CLI | Meaning |
 | --- | --- | --- |
 | `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of cells along x (columns) and y (rows). |
-| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Physical domain dimensions. |
-| `problem.steps` | `--steps` | Fixed number of explicit time steps. |
-| `problem.kappa` | `--kappa` | Positive constant diffusivity $\kappa$. |
-| `problem.cfl` | `--cfl` | Safety fraction of the maximum stable time step; must be in `(0,1]`. |
-| `problem.dt` | `--dt` | Optional positive time step. `null` selects automatic time stepping. |
-| `problem.flow_amplitude` | `--flow-amplitude` | Double-gyre amplitude $A$. `0` switches the flow off (heat equation). |
-| `problem.flow_epsilon` | `--flow-epsilon` | Double-gyre oscillation strength $\varepsilon \ge 0$. `0` gives the steady double gyre. |
-| `problem.flow_period` | `--flow-period` | Double-gyre period $T > 0$; $\omega = 2\pi/T$. |
+| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Basin dimensions (default 1 × 2). |
+| `problem.steps` | `--steps` | Time steps after the pigment is released. |
+| `problem.kappa` | `--kappa` | Positive constant pigment diffusivity $\kappa$. |
+| `problem.cfl` | `--cfl` | Safety fraction of the largest stable time step; must be in `(0,1]`. |
+| `problem.dt` | `--dt` | Optional positive time step. `null` derives it from `cfl` and `max_speed`. |
+| `problem.max_speed` | `--max-speed` | Estimate of the largest flow speed, from which the fixed time step is derived. |
+| `problem.check_interval` | `--check-interval` | Check the actual speeds against the stability limits every N steps; 0 = never. |
+| `problem.poisson_tol` | `--poisson-tol` | Stopping rule of the CG Poisson solver: $\lVert r\rVert \le$ tol $\lVert\zeta\rVert$ (default $10^{-10}$). |
+| `problem.poisson_max_iter` | `--poisson-max-iter` | The run stops with an error if a solve needs more iterations (default 20000). |
+| `problem.viscosity` | `--viscosity` | Viscosity $\nu > 0$, the only dissipation of the flow. |
+| `problem.wind` | `--wind` | `steady`: $F_0\sin(2\pi y/l_y)$; `periodic`: $F_0(1 + \alpha\sin(\omega t))\sin(2\pi y/l_y)$. |
+| `problem.wind_amplitude` | `--wind-amplitude` | $F_0$; 0 = no wind, the flow stays at rest. |
+| `problem.wind_alpha`, `problem.wind_period` | `--wind-alpha`, `--wind-period` | $\alpha$ and $T_w = 2\pi/\omega$ of the periodic wind. |
+| `problem.spinup` | `--spinup` | Flow-only time before the pigment is released. |
 | `problem.case` | `--case` | `pigment_drop`, `constant` or `cosine_decay`. |
 | `problem.background` | `--background` | Background value $c_0$ for `pigment_drop` and `constant`. |
 | `problem.amplitude` | `--amplitude` | Initial-field amplitude $A_0$ for `pigment_drop` and `cosine_decay`. |
 | `problem.blob_centre` | `--blob-x`, `--blob-y` | Blob centre $[x_0, y_0]$ for `pigment_drop`, in physical coordinates. |
 | `problem.blob_width` | `--blob-width` | Gaussian width $\sigma > 0$ for `pigment_drop`. |
 
-All four walls are no-flux walls; there is no boundary-type option and no wall values.
+All four walls are no-flux walls for the pigment and free-slip walls for the flow; there is no boundary option.
 
 The grid is cell-centred: $\Delta x = l_x/n_x$ and $\Delta y = l_y/n_y$. Derive them from global dimensions, never from local subdomain sizes.
 
-Time step: with $u_{\max} = \lvert A\rvert\pi/l_y$, $v_{\max} = 2\lvert A\rvert\pi(1+2\varepsilon)/l_x$,
+Time step: with $U$ = `max_speed` and the rates
 
 $$
-a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y},
+a = \frac{U}{\Delta x} + \frac{U}{\Delta y},
 \qquad
-d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right).
+d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right),
+\qquad
+n = \nu\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right),
 $$
 
-Automatic stepping uses $\Delta t = \mathrm{cfl}/(a+d)$. An explicit `dt` takes precedence over `cfl` but must still satisfy $\Delta t\,(a+d) \le 1$. See `docs/design.md` for the derivation.
+the largest stable step is $\min\big(1/(a+d),\ 0.5/a,\ 0.1/n\big)$, and automatic stepping uses `cfl` times it. An explicit `dt` takes precedence but must also satisfy the three limits. During the run, the measured face speeds are checked against the same limits every `check_interval` steps, and the run stops with a message if one is exceeded. See `docs/design.md`, "Time step".
 
 Case requirements:
 
-- `pigment_drop`: initializes $c_0 + A_0\exp\!\big(-((x-x_0)^2+(y-y_0)^2)/(2\sigma^2)\big)$. The default advection–diffusion case; the total mass is conserved.
+- `pigment_drop`: initializes $c_0 + A_0\exp\!\big(-((x-x_0)^2+(y-y_0)^2)/(2\sigma^2)\big)$. The default case; the total mass is conserved.
 - `constant`: initializes $c_0$. The field must stay constant under the flow.
-- `cosine_decay`: initializes $A_0\cos(\pi x/l_x)\cos(\pi y/l_y)$. Requires `flow_amplitude = 0`. Analytical reference; see `docs/design.md`.
+- `cosine_decay`: initializes $A_0\cos(\pi x/l_x)\cos(\pi y/l_y)$. Requires `wind_amplitude = 0`, so that the flow stays at rest. Analytical reference; see `docs/design.md`.
 
 The top row of exported matrices corresponds to the cell row next to the top wall (`y=ly`).
 
@@ -64,13 +72,13 @@ These apply to the parallel solver, `heat_parallel`; `heat_serial` ignores them 
 | --- | --- | --- |
 | `output.directory` | (runner) | Folder for the run's files, relative to the repository working directory. |
 | `output.write_field` | `--output PATH` | Write the final field to PATH: `.csv` as text, `.npy` as binary. The run summary is written next to it with the extension `.json`. |
-| `output.snapshot_interval` | `--snapshot-interval N` | Write a snapshot every N steps; 0 disables snapshots. |
+| `output.snapshot_interval` | `--snapshot-interval N` | Write a snapshot (pigment, $\psi$ and vorticity) every N steps; 0 disables snapshots. |
 | | `--snapshot-dir DIR` | Snapshot folder (default `outputs/snapshots`). |
-| | `--snapshot-coarsen K` | Store snapshots as K × K block averages (default 1, full size); K must divide `nx` and `ny`. |
+| | `--snapshot-coarsen K` | Store the pigment as K × K block averages and $\psi$ and the vorticity at every K-th corner (default 1, full size); K must divide `nx` and `ny`. |
 
 Parent folders are created as needed. Field matrices have `ny` rows and `nx` columns of interior cell values, top row first, excluding ghost cells and process halos. CSV files contain numeric values only, with 17 significant digits, enough for double-precision round trips.
 
-A snapshot folder contains `meta.json` (the configuration and `dt`), `index.csv` (one line per snapshot: `step,time,mass,file`) and the fields as `field_NNNNNN.npy`, which `numpy.load` reads. The mass in `index.csv` is that of the full field, also when snapshots are coarsened. Snapshot writing is excluded from the solver-loop timing.
+A snapshot folder contains `meta.json` (the configuration and `dt`), `index.csv` (one line per snapshot: `step,time,mass,energy,enstrophy,file,psi_file,vort_file`), the pigment as `field_NNNNNN.npy`, and $\psi$ and the vorticity on the $(n_y+1) \times (n_x+1)$ corners as `psi_NNNNNN.npy` and `vort_NNNNNN.npy`; `numpy.load` reads them. The mass in `index.csv` is that of the full field, also when snapshots are coarsened. Snapshot writing is excluded from the solver-loop timing.
 
 Validation dumps are small. Large benchmark runs should normally disable snapshots and full-field output; for large previews, coarsen the snapshots.
 

@@ -4,9 +4,9 @@ The shared components (`common/`), the serial solver (`serial/`) and the MPI + O
 
 | Directory | Contents |
 | --- | --- |
-| `common/` | Components shared by both solvers: configuration, grid, velocity, physics, stencil and output. Independent of MPI and OpenMP. |
+| `common/` | Components shared by both solvers: configuration, grid, the flow (vorticity equation and Poisson solver), physics, stencil and output. Independent of MPI and OpenMP. |
 | `serial/` | The serial driver and solver, the reference for correctness. |
-| `parallel/` | The MPI + OpenMP driver, solver, decomposition and halo exchange. |
+| `parallel/` | The MPI + OpenMP driver, solver, decomposition and halo exchange. The solver supplies the global sums and halo exchanges of the shared CG Poisson solver. |
 
 Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src` directory to all targets.
 
@@ -14,12 +14,16 @@ Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src`
 
 | File | Responsibility |
 | --- | --- |
-| `config.hpp`, `config.cpp` | CLI parsing, parameter validation and the global time step. Validates $\kappa > 0$, $\varepsilon \ge 0$, flow period $T > 0$, blob width $\sigma > 0$ and the case requirements. Computes $u_{\max}$, $v_{\max}$ from `velocity.hpp`, then $a$, $d$, and either $\Delta t = \mathrm{cfl}/(a+d)$ or checks an explicit `dt` against $\Delta t\,(a+d) \le 1$. Also computes $\mathrm{Pe}$ and $\mathrm{Pe}_{\text{grid}}$ for the run metadata, and holds the output options (`--output`, snapshots) and the `--help` text. |
-| `grid.hpp` | `Field`: a contiguous `std::vector<double>`, local dimensions, a halo of width `halo` on every side, `(i, j)` access and row pointers for the loops. `FaceVelocities`: the two face-velocity arrays (see below). `Block`: where a local block sits in the global grid and which of its sides are walls. |
-| `velocity.hpp`, `velocity.cpp` | The double-gyre streamfunction $\psi(x,y,t)$, the analytic speed bounds $u_{\max}$, $v_{\max}$, the per-face functions `face_velocity_east/north`, and `FlowField`, which fills a whole block's face velocities at time $t$ from global coordinates. |
+| `config.hpp`, `config.cpp` | CLI parsing, parameter validation and the fixed time step from `cfl` and `--max-speed`. Also the output options (`--output`, snapshots) and the `--help` text. |
+| `stability.hpp`, `stability.cpp` | The three stability limits (pigment, vorticity advection, viscosity) of `docs/design.md`, "Time step": the largest stable `dt` for given speeds, the check of measured speeds during the run, and the largest face speeds of a block. |
+| `grid.hpp` | `Field`: a contiguous `std::vector<double>`, local dimensions, a halo of width `halo` on every side, `(i, j)` access and row pointers for the loops. `FaceVelocities`: the two face-velocity arrays. `Block`: where a local block sits in the global grid and which of its sides are walls. |
+| `corners.hpp` | Corner fields ($\psi$, $\zeta$) stored in a `Field`: corner positions, the range of unknown corners of a block, and zeroing the ghost corners on the top and left walls. |
+| `flow.hpp`, `flow.cpp` | One row of the vorticity right-hand side $R = J(\psi,\zeta) + F + \nu\nabla^2\zeta$ (Arakawa Jacobian), the Adams–Bashforth weights and update, the wind profile and strength, the face velocities from $\psi$, and the energy and enstrophy sums. |
+| `poisson.hpp` | The conjugate gradient Poisson solver, matrix-free and warm-started. Header-only, so the parallel solver compiles its loops with OpenMP; the global sum and the halo exchange come in through a small `PoissonComm` interface (`SerialComm` for one process). |
+| `velocity.hpp`, `velocity.cpp` | An analytic streamfunction (the former prescribed double gyre) and its per-face velocities, kept as a reference for the face-velocity tests. |
 | `physics.hpp`, `physics.cpp` | Initial conditions (`pigment_drop` Gaussian, `constant`, `cosine_decay`), the no-flux wall ghost fill, the analytic `cosine_decay` reference (continuous and exact-discrete), and the local mass sum $\Delta x\,\Delta y\sum c_{i,j}$. |
-| `stencil.hpp` | An inline upwind flux update of one cell from its five cell values and its four face velocities; no communication or threading inside this function. |
-| `io.hpp`, `io.cpp` | Final fields as CSV or `.npy`, snapshot folders (`meta.json`, `index.csv`, `.npy` fields, optionally coarsened), and the run summary: a short report plus one `RESULT {json}` line with the parameters, `dt`, timing, mass error and Péclet numbers. |
+| `stencil.hpp` | An inline upwind flux update of one pigment cell from its five cell values and its four face velocities; no communication or threading inside this function. |
+| `io.hpp`, `io.cpp` | Final fields as CSV or `.npy`, snapshot folders (`meta.json`, `index.csv`, pigment, $\psi$ and vorticity as `.npy`, optionally coarsened), and the run summary: a short report plus one `RESULT {json}` line with the parameters, `dt`, timings, mass error, energy, enstrophy and measured speeds. |
 
 ### Stencil
 
@@ -33,18 +37,20 @@ $$
 
 where each face flux is the upwind advective flux minus the central diffusive flux, exactly as in `docs/design.md`. One helper, `face_flux(c_minus, c_plus, vel, kappa_h)`, computes the flux through a face from the cell on its minus side (west or south) to the cell on its plus side (east or north), and both cells that share the face call it with the same arguments in the same order. Then interior fluxes cancel bit-for-bit and the mass is conserved to rounding, in serial and across ranks.
 
-The stencil replaces the old heat-only update with `rx` and `ry`. With $A = 0$ all face velocities are zero and the update reduces to the old five-point diffusion.
+With no wind the flow stays at rest, all face velocities are zero, and the update reduces to five-point diffusion.
 
-### Velocity storage
+### The flow
 
-Face velocities are stored in arrays, not recomputed inside the stencil:
+Each solver owns the corner fields $\psi$ and $\zeta$ and three right-hand-side fields $R^n$, $R^{n-1}$, $R^{n-2}$, all of the pigment field's shape (see `corners.hpp`). One flow step (`docs/design.md`, "One time step"):
 
-- `U` has `local_ny` rows of `local_nx+1` vertical faces, `V` has `local_ny+1` rows of `local_nx` horizontal faces.
-- Each interior face is shared by two cells, so storing it evaluates $\psi$ (two `sin` calls per corner) once per face instead of twice, and keeps the stencil free of trigonometry.
-- If the flow is steady ($\varepsilon = 0$ or $A = 0$), fill the arrays once before the time loop. Otherwise refill them at the start of every step at the old time $t_n = n\,\Delta t$; this cost belongs to the timed loop.
-- Evaluate $\psi$ from **global** corner coordinates. Two ranks that share a face then compute the same value without communication.
-- `FlowField` uses that $\psi$ is separable, $\psi = A\,s_x(x,t)\,s_y(y)$ with $s_x = \sin(\pi f(X,t))$ and $s_y = \sin(\pi Y)$: it evaluates $s_x$ once per corner column per step and $s_y$ once per corner row, so a time-dependent refill costs $O(n_x + n_y)$ sines. The arithmetic is the same as in `face_velocity_east/north`, and the unit test checks that the two agree exactly.
-- Faces on a physical wall are set to exactly 0. Evaluating $\psi$ there gives about $10^{-16}$ instead, because $\sin(2\pi)$ is not exactly 0 in floating point.
+1. Exchange $\zeta$'s halos, including the corner ghosts (parallel only; in serial the wall ghosts simply stay 0).
+2. Compute $R^n$ at the unknown corners and advance $\zeta$ with the Adams–Bashforth weights of this step; then rotate the three $R$ fields by swapping, without copying.
+3. Solve the Poisson equation for $\psi$ with CG, starting from the previous $\psi$ (`PoissonCG`; in parallel with `MPI_Allreduce` sums and the halo exchange).
+4. Exchange $\psi$'s halos with corners (parallel only) and compute all face velocities from it.
+
+Face velocities are stored in arrays, as for the pigment stencil, and refreshed once per step. Faces on a wall come out exactly 0, because $\psi = 0$ at both of their corners.
+
+The time step is fixed for the run. Every `check_interval` steps the largest face speeds are measured (one `MPI_Allreduce` in parallel) and checked against the stability limits; a run whose speeds outgrow `--max-speed` stops with a message.
 
 ### Invariants
 
@@ -63,31 +69,31 @@ Face velocities are stored in arrays, not recomputed inside the stencil:
 
 Files: `main.cpp`, `solver.hpp`, `solver.cpp`. Run `heat_serial --help` for the options.
 
-The driver parses parameters, allocates the full domain with its ghost layer and the two face-velocity arrays, initializes the interior, runs a fixed number of time steps, optionally writes the final field and snapshots, and reports solver time and the mass error.
+The driver parses parameters, allocates the full domain with its ghost layer, the face-velocity arrays and the flow fields, spins the flow up from rest, releases the pigment, runs a fixed number of time steps, optionally writes the final field and snapshots, and reports the timings, the mass error and the flow diagnostics.
 
-Each time step $n$, at time $t_n = n\,\Delta t$:
+During spin-up each step is a flow step only. After the release, each time step $n$ is:
 
-1. Refill the physical-wall ghosts of the current field from its interior by the boundary rule (no-flux: ghost = adjacent interior cell).
-2. If the flow is time-dependent ($\varepsilon > 0$ and $A \ne 0$), refill the face velocities at $t_n$. For a steady flow they are filled once before the loop.
-3. Visit all interior rows and columns in a deterministic loop and call the shared stencil update.
-4. Swap the current and next fields.
+1. Refill the physical-wall ghosts of the pigment from its interior (no-flux: ghost = adjacent interior cell).
+2. Update every pigment cell with the shared stencil and the face velocities of $\psi^n$, then swap the current and next fields.
+3. Advance the flow to $\zeta^{n+1}$, $\psi^{n+1}$ and the new face velocities (see "The flow" above).
+4. Every `check_interval` steps, check the measured speeds against the stability limits.
 
 The solver must not depend on MPI or OpenMP. Use the same problem, time step, number of steps and precision as the parallel versions.
 
-Timing covers the whole time-stepping loop, including the ghost fill and any per-step velocity evaluation; snapshot writing is measured separately and excluded. Allocation, initialization, file output and validation are separate phases. The total mass $M$ is computed before and after the loop, outside the timed region; with no-flux walls its relative change (`mass_error`, see `docs/experiment_plan.md`) stays at rounding level, about $10^{-13}$ after tens of thousands of steps. Do not infer correctness from a heatmap alone.
+Timing covers the whole time-stepping loop, including the ghost fill and the flow step; the spin-up and the snapshot writing are measured separately, and the time spent in the Poisson solve is reported as well. Allocation, initialization, file output and validation are separate phases. The total mass $M$ is computed before and after the loop, outside the timed region; with no-flux walls its relative change (`mass_error`, see `docs/experiment_plan.md`) stays at rounding level, about $10^{-13}$ after tens of thousands of steps. Do not infer correctness from a heatmap alone.
 
 ## Parallel solver (`parallel/`)
 
-Run `heat_parallel --help` for the options. On every correctness case it reproduces the serial field bit for bit; `ctest` checks this (`correctness_parallel`).
+Run `heat_parallel --help` for the options. On every correctness case it agrees with the serial field to about $10^{-13}$ (the CG sums add in a different order); `ctest` checks this (`correctness_parallel`).
 
 | File | Responsibility |
 | --- | --- |
 | `main.cpp` | MPI initialization, rank-aware errors, parameter handling, solver invocation and finalization. |
-| `solver.hpp`, `solver.cpp` | Time loop, physical-wall ghost fill, per-step velocity refill, OpenMP worksharing, strategy selection, timing and the mass reduction. |
+| `solver.hpp`, `solver.cpp` | Spin-up and time loop, physical-wall ghost fill, the flow step, OpenMP worksharing, strategy selection, the speed check, timing and the global sums. |
 | `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology and physical-edge ownership. |
-| `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange of the scalar field. |
+| `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange of the pigment, and the blocking exchange with corners for $\psi$ and $\zeta$. |
 
-### Initial implementation
+### Implementation
 
 1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI.
 2. Split global rows across ranks, including any remainder. Then extend the same interface to a 2D Cartesian process grid. The decomposition is unchanged by the advection–diffusion model.
@@ -96,9 +102,9 @@ Run `heat_parallel --help` for the options. On every correctness case it reprodu
    - **Internal edge** (a neighbouring rank exists): MPI halo exchange.
    - **Physical edge** (the side lies on a global wall): local ghost fill by the boundary rule, e.g. the no-flux mirror fill, ghost = adjacent interior cell. This is refilled every step, because it depends on the current interior.
 5. Implement blocking halo exchange using a deadlock-safe communication pattern such as `MPI_Sendrecv`.
-6. If the flow is time-dependent ($\varepsilon > 0$, the double gyre), refill the local face velocities at $t_n$ every step. Each rank evaluates $\psi$ at global corner coordinates, so faces on a rank boundary agree on both sides without communicating velocities. Only the scalar field is exchanged.
-7. Parallelize local point updates, the ghost fill and the velocity refill with OpenMP, with one writer per destination value.
-8. Add overlap: post receives and sends, fill physical-wall ghosts and refill velocities (both local work), update the strict local interior, wait for all requests, then update the remaining local boundary cells exactly once.
+6. After the pigment update, advance the flow: exchange $\zeta$ with corners, compute the right-hand side and the Adams–Bashforth update on the local unknown corners, solve the Poisson equation with CG (one halo exchange and two `MPI_Allreduce` sums per iteration), exchange $\psi$ with corners, and compute the local face velocities. Both ranks next to a shared face compute it from the same $\psi$ values, so they agree exactly.
+7. Parallelize the pigment update, the vorticity rows, the face velocities and the CG loops with OpenMP, with one writer per destination value.
+8. Overlap (pigment only): post receives and sends, fill the physical-wall ghosts, update the strict local interior, wait for all requests, then update the remaining local boundary cells exactly once. The flow exchanges are blocking.
 9. Complete outstanding sends and receives before swapping or reusing their buffers. Do not update a receive region while communication is pending.
 
 ### Strict interior under overlap
@@ -109,12 +115,12 @@ At one or two cells per local dimension, the overlap interior may be empty. Use 
 
 ### Communication details
 
-Rows are contiguous: they are sent straight from the field with an MPI vector datatype (`halo` rows of `nx` interior values). Columns are packed into contiguous buffers before sending and unpacked after receiving. Blocking and overlapping exchange use the same scheme, so comparing them changes only the timing of the messages. Only interior values are sent and only edge ghost cells are written; corner ghosts are never touched.
+Rows are contiguous: they are sent straight from the field with an MPI vector datatype (`halo` rows of `nx` interior values). Columns are packed into contiguous buffers before sending and unpacked after receiving. Blocking and overlapping exchange use the same scheme, so comparing them changes only the timing of the messages. For the pigment, only interior values are sent and only edge ghost cells are written. For $\psi$ and $\zeta$, the corner exchange first sends the columns and then whole rows including their ghost columns, which carries the diagonal neighbours' values into the corner ghosts.
 
 For each MPI communicator used, determine neighbors and gather metadata with its own rank numbering, especially if Cartesian rank reordering is enabled.
 
 ### Diagnostics and timing
 
-The total mass $M = \Delta x\,\Delta y\sum c_{i,j}$ needs a local sum followed by an `MPI_Allreduce`. Compute it before and after the timed loop, or only at snapshot intervals, never every step inside the timed region. Compare it with the serial value using a tolerance, because the summation order differs.
+The total mass $M = \Delta x\,\Delta y\sum c_{i,j}$, the energy and the enstrophy need a local sum followed by an `MPI_Allreduce`. They are computed before and after the timed loop and at snapshots, never every step inside the timed region, and differ from the serial values in the last digits because the summation order differs. The speed check every `check_interval` steps needs one `MPI_Allreduce` with `MPI_MAX`, which is exact.
 
-Gather only small fields for validation or selected visual output, outside solver timing. Use a barrier before the timed region and reduce local elapsed times with `MPI_MAX` after it. The timed loop includes the halo exchange, the physical-wall ghost fill and any per-step velocity refill. A global barrier is not required after every time step when neighbor exchanges already enforce the required dependencies.
+Gather only small fields for validation or selected visual output, outside solver timing. Use a barrier before the timed region and reduce local elapsed times with `MPI_MAX` after it. The timed loop includes the halo exchanges, the physical-wall ghost fill and the whole flow step. A global barrier is not required after every time step when neighbor exchanges already enforce the required dependencies.

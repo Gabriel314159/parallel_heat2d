@@ -8,7 +8,7 @@ Status: planned. No checks or benchmarks are claimed as completed.
 
 For each small case, compare the final full matrix from `heat_serial` with each selected parallel strategy. Use identical global grid dimensions, geometry, diffusivity, flow parameters, initial condition, time step, step count and precision. Compare with an absolute and relative tolerance, initially `1e-10` each, and record the observed error.
 
-Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both row and 2D decompositions, and both blocking and overlap modes. Run these with the time-dependent double gyre switched on, plus one steady ($\varepsilon = 0$) case to exercise the fill-once velocity path.
+Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both row and 2D decompositions, and both blocking and overlap modes. Run these with the computed flow switched on (a short spin-up, then the pigment), mostly with the steady wind plus one case with the periodic wind.
 
 ### Mass conservation
 
@@ -22,7 +22,7 @@ For non-negative fields such as `pigment_drop` the denominator is $M_0$ itself, 
 
 ### Constant field
 
-Initialize every cell to the same constant $c_0$ with the double gyre switched on. Because the discrete flow is divergence-free and the walls are no-flux, every update must retain $c_0$ up to floating-point roundoff. This checks initialization, the ghost fill, halo updates, the face velocities and the update formula together.
+Initialize every cell to the same constant $c_0$ with the computed flow switched on. Because the discrete flow is divergence-free and the walls are no-flux, every update must retain $c_0$ up to floating-point roundoff. This checks initialization, the ghost fill, halo updates, the face velocities and the update formula together.
 
 ### Analytical cosine decay
 
@@ -38,6 +38,44 @@ Two separate comparisons:
 2. **Continuous solution.** Compare with $c(x,y,0)\,\exp\!\big(-\kappa\pi^2(1/l_x^2+1/l_y^2)\,t\big)$ at the actual $t = n\,\Delta t$. This difference is discretization error, not a bug, and is reported separately. Run a mesh-refinement study at a common physical final time, recomputing stable time steps, and check that the error decreases at the expected order. Record both time and spatial resolution.
 
 The correctness manifest includes one cosine case for baseline equivalence and analytical error reporting. It does not by itself define the complete refinement study; add the common-final-time resolution series when implementing that study.
+
+### Computed flow
+
+These checks cover the wind-driven flow of `design.md`. Each one targets one part of the solver. They run in `ctest` (`tests/test_poisson.cpp`, `tests/test_flow.cpp`, `tests/test_serial_solver.cpp`) and in `scripts/check_correctness.py`.
+
+**Rest stays at rest.** Without wind ($F_0 = 0$) and starting from $\zeta = 0$, the fields $\psi$ and $\zeta$ must stay exactly 0. This checks that no term creates flow out of nothing.
+
+**Poisson solver.** With $\psi = 0$ on the walls,
+
+$$
+\psi(x,y) = \sin\!\Big(\frac{\pi x}{l_x}\Big)\sin\!\Big(\frac{\pi y}{l_y}\Big)
+$$
+
+is an exact eigenfunction of the discrete five-point Laplacian on the corners, so the CG solver must reproduce it to its tolerance. On a random right-hand side, the true relative residual of the solution must meet the tolerance. On a smooth right-hand side with a known solution, the error must fall by about 4× each time the grid is refined by 2×. A zero right-hand side must give $\psi = 0$ exactly, a warm start from the solution must need no iterations, and a solve that cannot reach the tolerance must stop with a message.
+
+**Velocities from ψ.** Sampling an analytic streamfunction on the corners and applying the face formulas must give exactly the face velocities computed from the streamfunction directly. The discrete divergence must stay at rounding level for any $\psi$.
+
+**Conservation of the Arakawa Jacobian.** Without wind and viscosity, the discrete energy $E$ and enstrophy $Z$ (`design.md`, "Diagnostics") must be conserved up to the time-stepping error, which must shrink at least like $\Delta t^2$ as $\Delta t$ is reduced (the forward-Euler start-up step is first order).
+
+**Linear steady state.** Without the advection term and with the steady wind, the steady state solves $\nu\nabla^2\zeta = -F$, $\zeta = -\nabla^2\psi$, with $\psi = \zeta = 0$ on the walls. Expanding $1 = \sum_{m\ \text{odd}} \frac{4}{m\pi}\sin(m\pi x/l_x)$ gives the exact solution
+
+$$
+\psi(x,y) = \sum_{m\ \text{odd}} \frac{4F_0}{m\pi\,\nu\,\lambda_m^2}\,\sin\!\Big(\frac{m\pi x}{l_x}\Big)\sin\!\Big(\frac{2\pi y}{l_y}\Big),
+\qquad
+\lambda_m = \Big(\frac{m\pi}{l_x}\Big)^2 + \Big(\frac{2\pi}{l_y}\Big)^2 .
+$$
+
+The discrete steady state (two Poisson solves) must converge to it at second order; time-stepping from rest must reach the discrete steady state; and for $F_0 > 0$ the southern gyre must turn counterclockwise and the northern one clockwise.
+
+**Manufactured solution.** We choose a smooth $\psi(x,y,t)$ that vanishes, with its Laplacian, on the walls, compute the source term that makes it an exact solution, and add that source to $F$. The error must converge at second order in space. This one check exercises every term at once.
+
+**The two wind forms.** `--wind periodic` with $\alpha = 0$ must give exactly the same result as `--wind steady`.
+
+**Pigment.** The pigment mass must stay conserved to about $10^{-13}$, and a constant pigment field must stay constant under the flow.
+
+**Time-step check.** A run whose fixed $\Delta t$ is too large for the speeds the flow reaches must stop with a message naming the violated limit.
+
+**Serial and parallel.** The CG solver's global sums add the rank contributions in a different order in parallel, so the serial and parallel solutions are no longer identical bit for bit. They must agree within `serial_parallel_atol` and `serial_parallel_rtol` (initially $10^{-10}$); on the correctness cases the largest difference is about $5\times10^{-14}$. Over long runs of an unsteady flow the two may drift apart, even though both are correct; long runs are then compared through statistics such as the time-mean kinetic energy.
 
 ## Timing protocol
 
@@ -66,7 +104,7 @@ The denominator counts physical CPU cores when one thread is bound to each physi
 
 ## Weak scaling
 
-Keep a 512-by-512 interior block and four threads per rank, then use 1, 4 and 16 ranks with square process grids. Keep `dx` and `dy` fixed and grow the physical domain according to the configuration rules. Scale the double-gyre amplitude with the domain size so that the speed bounds $u_{\max}$, $v_{\max}$ stay fixed. Thus the automatic `dt`, step count and work per core remain comparable.
+Keep a 512-by-512 interior block and four threads per rank, then use 1, 4 and 16 ranks with square process grids. Keep `dx` and `dy` fixed and grow the physical domain according to the configuration rules. Keep the flow settings and the speed estimate `--max-speed` fixed, so that `dt` and the step count are the same for every run. The pigment and vorticity updates then do the same work per core in every run, but the Poisson solve does not: the number of CG iterations per step grows with the global grid (about doubling when the grid doubles in each direction). Record the CG iterations and the Poisson time, and report the time per CG iteration alongside the total time.
 
 ```text
 weak-scaling efficiency = median_time(reference_resources) / median_time(larger_resources)

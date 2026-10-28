@@ -22,6 +22,14 @@ On 27 October 2026, Anthropic Claude (Claude Code, local session; Claude Sonnet 
 
 Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
 
+On 28 October 2026, Anthropic Claude (Claude Code, local session; Claude Opus 5.5) continued the work:
+
+- Design: drafted the computed wind-driven flow for `docs/design.md` (vorticity–streamfunction form, Arakawa Jacobian, third-order Adams–Bashforth, free-slip walls, corner storage and the corner-aware halo exchange) and restructured the document into the team's writing style. At the team's direction, the double gyre was dropped as a model, bottom friction was left out, and the β term was removed; the β-free description of the flow was revised accordingly, with a placeholder for the final parameters.
+- Implementation by Claude: the computed flow in both solvers (`src/common/flow.*`, `corners.hpp`, `stability.*`), the halo exchange with corners, the fixed time step with a run-time speed check, snapshots of ψ and the vorticity, the updated plotting scripts, configuration, experiments and documentation. The Poisson equation for ψ was first solved directly with a sine transform; at the team's request this was replaced by a matrix-free, warm-started conjugate gradient solver (`src/common/poisson.hpp`), shared by both solvers, with the MPI sums and halo exchanges supplied by the parallel solver.
+- Checks run during the session (Apple M-series laptop, Open MPI 5.0): all `ctest` suites, including new ones for the CG solver (exact eigenmode, true residual within the tolerance, warm start, zero right-hand side, second-order convergence, a stop with a message when the iteration limit is reached), the flow (Arakawa energy and enstrophy conservation, rest stays at rest, linear steady state against its series solution, a manufactured solution converging at second order) and the halo exchange on 1, 4 and 6 ranks; `scripts/check_correctness.py` with serial/parallel differences of at most about 5e-14. Measured CG cost: about 180 iterations per step on 128 × 256 cells and 350 on 256 × 512, with the Poisson solve taking over 99% of the run time. Parameter scans on a 128 × 256 grid showed that, without β, the steady wind spins up two smooth gyres over a long viscous time, with no eddies within 100 time units up to Re of about 4000.
+
+Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
+
 ## Append future entries
 
 For each substantial use, record:

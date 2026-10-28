@@ -1,15 +1,15 @@
 # Parallel Heat2D
 
-A course project on a parallel two-dimensional advection–diffusion solver (pigment in a double-gyre flow) using C++, MPI and OpenMP.
+A course project on a parallel two-dimensional solver for pigment carried by a wind-driven flow in a closed basin, using C++, MPI and OpenMP.
 
-We will implement the same numerical method in serial and in parallel, then compare how domain decomposition, halo communication and thread allocation affect correctness and performance.
+The same numerical method runs in serial and in parallel, to compare how domain decomposition, halo communication and thread allocation affect correctness and performance.
 
 ## Current status
 
 Implemented and tested:
 
-- Shared components ([src/common/](src/README.md)): command line and validation, grid storage, the double-gyre velocity, initial conditions, no-flux walls, the upwind flux stencil, and field and snapshot output.
-- The serial solver `heat_serial` and the MPI + OpenMP solver `heat_parallel` (row and 2D decompositions, blocking and overlapping halo exchange). On every correctness case, `heat_parallel` reproduces the serial field bit for bit.
+- Shared components ([src/common/](src/README.md)): command line and validation, grid storage, the flow (vorticity equation with the Arakawa Jacobian and a conjugate gradient Poisson solver), initial conditions, no-flux walls, the upwind flux stencil, and field and snapshot output.
+- The serial solver `heat_serial` and the MPI + OpenMP solver `heat_parallel` (row and 2D decompositions, blocking and overlapping halo exchange). On every correctness case, `heat_parallel` agrees with the serial result to within about $5\times10^{-14}$, flow included. The match is not bit for bit, because the global sums of the Poisson solver add the ranks' contributions in a different order.
 - Unit tests ([tests/](tests/), run with `ctest`) and [scripts/check_correctness.py](scripts/check_correctness.py): mass conservation, constant fields under the flow, the exact discrete cosine-decay solution, and serial/parallel comparisons.
 - [scripts/plot_field.py](scripts/plot_field.py) and [scripts/animate_field.py](scripts/animate_field.py) for pictures and animations of the pigment.
 
@@ -18,35 +18,31 @@ Not implemented yet:
 - The benchmark runner and scaling plots (`scripts/run_benchmarks.py`, `scripts/plot_results.py`).
 - Measurements on Atlas or Vanda.
 
-Checks of the original repository scaffold are recorded in [docs/scaffold_checks.md](docs/scaffold_checks.md).
-
 ## Problem
 
-We model a passive scalar $c(x,y,t)$, for example pigment concentration, carried by a prescribed flow and diffusing in a closed rectangular box $[0,l_x]\times[0,l_y]$:
+A pigment with concentration $c(x,y,t)$ is carried by a flow $\mathbf{u}$ and diffuses in a closed basin $[0,l_x]\times[0,l_y]$:
 
 $$
-\frac{\partial c}{\partial t} + \nabla\cdot(\mathbf{u}c) = \kappa\left(\frac{\partial^2 c}{\partial x^2} + \frac{\partial^2 c}{\partial y^2}\right)
+\frac{\partial c}{\partial t} + \nabla\cdot(\mathbf{u}c) = \kappa\nabla^2 c .
 $$
 
-- $\kappa > 0$ is a constant diffusivity.
-- $\mathbf{u} = (u, v)$ is the time-periodic **double gyre**, defined by a streamfunction $\psi$ with $u = \partial\psi/\partial y$, $v = -\partial\psi/\partial x$. It is divergence-free and has zero normal velocity on every wall.
-- All four walls are **no-flux** walls, so the total amount of scalar is conserved.
-- The default case drops a Gaussian blob of pigment into the box and lets the gyres stretch and fold it.
-- With flow amplitude $A = 0$ the model reduces to the heat equation with insulated walls, which gives an analytical reference.
-
-The numerical method is a cell-centred finite-volume scheme: first-order upwind advection, central-difference diffusion and forward Euler in time, on a grid with $\Delta x = l_x/n_x$ and $\Delta y = l_y/n_y$. `nx` and `ny` count cells. The time step must satisfy
+The flow is computed at the same time, from the two-dimensional Navier–Stokes equations in vorticity form, driven by the wind and damped by viscosity:
 
 $$
-\Delta t\,(a + d) \le 1,
+\frac{\partial \zeta}{\partial t} + \mathbf{u}\cdot\nabla\zeta = F(y,t) + \nu\nabla^2\zeta,
 \qquad
-a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y},
+\nabla^2\psi = -\zeta,
 \qquad
-d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right),
+u = \frac{\partial\psi}{\partial y},\quad v = -\frac{\partial\psi}{\partial x}.
 $$
 
-and automatic stepping uses $\Delta t = \mathrm{cfl}/(a+d)$ with $0 < \mathrm{cfl} \le 1$ (default 0.8).
+- The wind $F = F_0\sin(2\pi y/l_y)$ (`--wind steady`) drives two gyres; `--wind periodic` lets its strength oscillate, $F_0(1+\alpha\sin(\omega t))\sin(2\pi y/l_y)$.
+- The pigment walls are no-flux walls, so the total pigment is conserved; the flow walls are free-slip ($\psi = \zeta = 0$).
+- The pigment does not affect the flow. With no wind, the flow stays at rest and the pigment obeys the heat equation, which gives an analytical reference.
 
-The full specification, including the face velocities, flux formulas and parallel design, is in [docs/design.md](docs/design.md).
+Numerics: a cell-centred finite-volume grid for the pigment (first-order upwind advection, central diffusion, forward Euler) and the cell corners for $\psi$ and $\zeta$ (Arakawa Jacobian, third-order Adams–Bashforth, and a conjugate gradient Poisson solver). The velocities on the cell faces come from $\psi$ and are exactly divergence-free. The time step is fixed for a run, derived from an estimate of the largest speed (`--max-speed`), and the actual speeds are checked during the run.
+
+The full specification is in [docs/design.md](docs/design.md).
 
 ## Build and test
 
@@ -92,41 +88,36 @@ Set `OMP_NUM_THREADS=1` for an MPI-only baseline. A single-rank run of `heat_par
 The plotting scripts need Python 3.9+ with NumPy and Matplotlib 3.6+ (`python3 -m pip install -r requirements.txt`).
 
 ```bash
-./build/heat_serial --nx 512 --ny 512 --kappa 0.001 --steps 21200 \
-    --snapshot-interval 212 --snapshot-dir outputs/preview
-python3 scripts/animate_field.py outputs/preview --velocity streamlines -o outputs/preview.gif
-python3 scripts/plot_field.py outputs/preview/field_004240.npy --gamma 0.5 --velocity streamlines
+OMP_NUM_THREADS=2 mpiexec -n 4 ./build/heat_parallel --decomp 2d --exchange overlap \
+    --snapshot-interval 500 --snapshot-coarsen 2 --snapshot-dir outputs/preview
+python3 scripts/animate_field.py outputs/preview --flow streamlines -o outputs/preview.gif
+python3 scripts/animate_field.py outputs/preview --field vorticity -o outputs/vorticity.gif
+python3 scripts/plot_field.py outputs/preview/field_025000.npy --flow streamlines --gamma 0.5
 ```
 
-This simulates one flow period ($t \approx 10$) on a 512 × 512 grid in well under a minute on one laptop core, and writes 101 snapshots of 2 MB each. The blob starts on the line between the two gyres, is carried up along it, and is then stretched around both gyres; the gyre centres stay pigment-poor longest. Write `.mp4` instead of `.gif` for smoother colours (needs ffmpeg).
+With the defaults ($256 \times 512$ cells, $\nu = 10^{-3}$, $F_0 = 0.1$), the flow first spins up alone for 100 time units into two gyres with speeds of about 1; then the pigment is released on the line between them and followed for 50,000 steps (about 20 time units), with 101 snapshots. That is about 306,000 steps, each needing about 350 CG iterations for $\psi$. On an 8-core laptop with 4 ranks × 2 threads, a step takes about 0.08 s, so the whole run takes roughly 6–7 hours (estimated from the first 700 steps). Run it on a bigger machine, or use a coarser grid for a quick look (with `--nx 128 --ny 256`, each step is about 8× cheaper). Write `.mp4` instead of `.gif` for smoother colours (needs ffmpeg).
 
-The choice of $\kappa$ matters. With the default $\kappa = 0.005$, diffusion smooths the blob out within a few time units. A smaller $\kappa$ keeps the filaments sharp but needs a finer grid: keep the grid Péclet number printed by the solver below about 2.
+Every snapshot holds the pigment, $\psi$ and the vorticity, so `--field vorticity` and `--field psi` show the flow itself and `--flow streamlines` draws the streamlines of the same moment.
 
 ## Larger runs on a bigger machine
 
-Halving $\kappa$ with each doubling of the grid keeps the grid Péclet number at about 1.8 and makes the mixing sharper. The work then grows about 8× per doubling:
+Each step costs one pigment update, one vorticity update and one Poisson solve. The CG Poisson solve takes over 99% of the time (measured on $128 \times 256$ cells). The time step is set by the speed estimate, $\Delta t = 0.8 \times 0.5/(U_{\max}(1/\Delta x + 1/\Delta y))$, so it halves when the grid is refined. The CG iterations per step also double (about 180 on $128 \times 256$, 350 on $256 \times 512$), so the cost per time unit grows about 16× per doubling of the grid.
 
-| Grid | `--kappa` | Steps per flow period ($t = 10$) | Cell updates per period | One core at 2.5e8 updates/s | Full-size snapshot |
-| --- | --- | --- | --- | --- | --- |
-| 512 × 512 | 0.001 | 21,150 | 5.5e9 | 0.4 min | 2 MB |
-| 1024 × 1024 | 0.0005 | 42,300 | 4.4e10 | 3 min | 8 MB |
-| 2048 × 2048 | 0.00025 | 84,600 | 3.6e11 | 24 min | 34 MB |
-| 4096 × 4096 | 0.000125 | 169,200 | 2.8e12 | 3.2 h | 134 MB |
+The physics also changes with the parameters. With the steady wind and these viscosities, the flow spins up over a viscous time of about $1/(\nu\,\pi^2(1/l_x^2 + 4/l_y^2))$ (25 at $\nu = 2\times10^{-3}$, 100 at $5\times10^{-4}$) into two steady gyres; in test runs up to $\mathrm{Re}$ of about 4000 the flow was still smooth after 100 time units. Use `--wind periodic` (for example `--wind-alpha 1.5 --wind-period 20`, which reverses the wind) for a strongly time-dependent flow.
 
-`heat_parallel` divides the time by roughly the number of cores times the parallel efficiency. On a laptop, 1024² ran 4.2× faster than serial with 2 ranks × 2 threads; measure the other machine with a short run (`--steps 1000`) before planning a long one.
-
-[hpc/big_run.sh](hpc/big_run.sh) runs one such case with snapshots, serial or parallel; its settings come from environment variables:
+[hpc/big_run.sh](hpc/big_run.sh) runs one large case with snapshots, serial or parallel; its settings come from environment variables:
 
 ```bash
-# 2048^2 for two flow periods on 16 cores, snapshots as 512^2 block averages (8 MB each)
-HEAT2D_REPO=$PWD RANKS=16 THREADS=1 nohup bash hpc/big_run.sh > outputs/run2048.log 2>&1 &
+mkdir -p outputs
+# 512 x 1024 cells with the default flow, spin-up 100, then about 40 time units with the pigment
+HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 ```
 
-- `--snapshot-coarsen K` (`COARSEN`) stores K × K block averages, which keep the total mass; K must divide `nx` and `ny`.
-- The final field goes to `final.npy`; binary output keeps large grids small (a 4096² CSV would be about 400 MB).
+- `--snapshot-coarsen K` (`COARSEN`) stores the pigment as K × K block averages (which keep the total mass) and $\psi$ and the vorticity at every K-th corner; K must divide `nx` and `ny`.
+- The final pigment field goes to `final.npy`; binary output keeps large grids small.
 - `nohup` (or `tmux`) keeps the run going after logging out; the report is at the end of the log file.
-- Animate on the big machine, or copy the snapshot folder back, for example `rsync -av machine:parallel_heat2d/outputs/run2048 outputs/`.
-- Memory is not a constraint: about 5 × 8 × nx × ny bytes in total, 0.7 GB at 4096².
+- If the flow outgrows `--max-speed` (`MAXSPEED`), the run stops with a message naming the limit; rerun with a larger estimate.
+- Animate on the big machine, or copy the snapshot folder back, for example `rsync -av machine:parallel_heat2d/outputs/run512 outputs/`.
 
 ## Repository layout
 
