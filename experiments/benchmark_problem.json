@@ -1,0 +1,26 @@
+{
+  "schema_version": 5,
+  "defaults": "../config/defaults.json",
+  "description": "The one fixed problem P that experiments 1 to 4 solve, and whose flow and pigment settings experiment 5 uses. The grid and the number of steps are provisional: they are chosen so that a serial run takes a few minutes on a laptop. Time one run on Atlas or Vanda, then adjust them here, in this one place. The settings are written out in full, so that a change of config/defaults.json cannot change a benchmark.",
+  "problem": {
+    "nx": 512,
+    "ny": 1024,
+    "lx": 1.0,
+    "ly": 2.0,
+    "steps": 100,
+    "kappa": 0.0001,
+    "case": "pigment_drop",
+    "background": 0.0,
+    "amplitude": 1.0,
+    "blob_centre": [0.2, 1.0],
+    "blob_width": 0.05,
+    "max_speed": 2.0,
+    "check_interval": 100,
+    "viscosity": 0.001,
+    "wind": "steady",
+    "wind_amplitude": 0.1,
+    "wind_alpha": 0.0,
+    "wind_period": 1.0,
+    "spinup": 0.0
+  }
+}

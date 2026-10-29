@@ -1,66 +1,21 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "kind": "strong_scaling",
-  "defaults": "../config/defaults.json",
-  "description": "Fixed global grid, steps and flow; MPI-only scaling before fixed-core hybrid comparisons. Same problem and flow as strategies.json.",
-  "problem": {
-    "nx": 2048,
-    "ny": 4096,
-    "lx": 1.0,
-    "ly": 2.0,
-    "steps": 1000,
-    "kappa": 0.0001,
-    "case": "pigment_drop",
-    "background": 0.0,
-    "amplitude": 1.0,
-    "blob_centre": [
-      0.2,
-      1.0
-    ],
-    "blob_width": 0.05,
-    "max_speed": 2.0,
-    "check_interval": 100,
-    "viscosity": 0.001,
-    "wind": "steady",
-    "wind_amplitude": 0.1,
-    "wind_alpha": 0.0,
-    "wind_period": 1.0,
-    "spinup": 0.0
-  },
-  "execution": {
-    "backend": "parallel"
-  },
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 1: serial vs MPI (strong scaling over ranks). The fixed problem P on 1, 2, 4, 8 and 16 MPI ranks with one thread each, compared with the pure serial program.",
+  "execution": {"backend": "parallel"},
   "decomposition": "2d",
   "exchange": "blocking",
   "include_serial_reference": true,
   "resources": [
-    {
-      "mpi_ranks": 1,
-      "omp_threads": 1
-    },
-    {
-      "mpi_ranks": 2,
-      "omp_threads": 1
-    },
-    {
-      "mpi_ranks": 4,
-      "omp_threads": 1
-    },
-    {
-      "mpi_ranks": 8,
-      "omp_threads": 1
-    },
-    {
-      "mpi_ranks": 16,
-      "omp_threads": 1
-    }
+    {"mpi_ranks": 1, "omp_threads": 1},
+    {"mpi_ranks": 2, "omp_threads": 1},
+    {"mpi_ranks": 4, "omp_threads": 1},
+    {"mpi_ranks": 8, "omp_threads": 1},
+    {"mpi_ranks": 16, "omp_threads": 1}
   ],
   "warmup_runs": 1,
   "repetitions": 5,
-  "output": {
-    "directory": "outputs/strong_scaling",
-    "write_field": false,
-    "snapshot_interval": 0
-  },
-  "metrics_csv": "results/raw/strong_scaling.csv"
+  "output": {"directory": "outputs/strong_scaling_mpi", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/strong_scaling_mpi.csv"
 }

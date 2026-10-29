@@ -67,6 +67,28 @@ def format_value(value) -> str:
     return str(value)
 
 
+# The objects of an experiment file that are merged on top of its defaults.
+SHARED_KEYS = ("problem", "execution", "output")
+
+
+def resolve_base(path: str | Path, _depth: int = 0) -> dict:
+    """The configuration that a JSON file starts from.
+
+    A file may name another with "defaults" (a path relative to the file). That
+    file is resolved first, in the same way, and the problem, execution and
+    output objects of this file are merged on top. An experiment can therefore
+    inherit experiments/benchmark_problem.json, which inherits config/defaults.json.
+    """
+    path = Path(path).resolve()
+    data = load_json(path)
+    if "defaults" not in data:
+        return data
+    if _depth >= 4:
+        raise ValueError(f"{path}: the chain of 'defaults' files is too long (a cycle?)")
+    base = resolve_base(path.parent / data["defaults"], _depth + 1)
+    return deep_merge(base, {key: data[key] for key in SHARED_KEYS if key in data})
+
+
 def problem_args(problem: dict) -> list[str]:
     """Solver flags for a resolved "problem" object."""
     unknown = set(problem) - set(PROBLEM_FLAGS) - {"blob_centre"}

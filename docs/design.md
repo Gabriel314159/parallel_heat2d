@@ -501,7 +501,7 @@ We divide the global grid into horizontal strips, assigning each MPI process a s
 $$\mathrm{start}(s)=sq+\min(s,r),
 \mathrm{count}(s)=q+(s<r).$$
 
-We create a one-dimensional Cartesian communicator using `MPI_Cart_create`, where processes are logically arranged from top to bottom. We use  `MPI_Cart_shift` to identify its upper and lower neighbors because MPI may assign different rank numbers in the Cartesian communicator.
+We create a one-dimensional Cartesian communicator using `MPI_Cart_create`, where processes are logically arranged from top to bottom. We use `MPI_Cart_shift` to identify its upper and lower neighbors. We switch rank reordering off (`reorder = 0` in `MPI_Cart_create`), so every rank keeps the number it has in `MPI_COMM_WORLD` and MPI cannot move a rank away from the core the launcher chose for it. This keeps the placement the same in all runs that we compare.
 
 Before evaluating a stencil that requires neighboring rows, each process exchanges its first and last interior rows with its upper and lower neighbors, respectively. 
 
@@ -526,7 +526,7 @@ $$
 
 The neighbours come from an MPI Cartesian communicator:
 
-- We create it with `MPI_Cart_create` as a non-periodic $p_y \times p_x$ grid, with rank reordering allowed. All later communication, including the rank numbers in the output, uses this communicator and not the world one.
+- We create it with `MPI_Cart_create` as a non-periodic $p_y \times p_x$ grid, with rank reordering switched off as for the rows. All later communication uses this communicator.
 - `MPI_Cart_shift` gives the north, south, west and east neighbours. On the global edge it returns `MPI_PROC_NULL`, so a rank has a physical wall exactly on those sides and no message is sent there.
 
 Rows are contiguous in row-major storage, so a halo row is sent straight from the field with an MPI vector datatype. Columns are not contiguous: we copy them into a send buffer (column packing), send the buffer, and copy the received buffer into the ghost columns. The blocking and the overlapping exchange use the same packing, so comparing them changes only when the messages are sent and waited for.
@@ -559,9 +559,27 @@ The two phases must run in order, so this exchange is blocking. The pigment upda
 
 ## OpenMP and MPI thread support
 
-Begin with `MPI_Init_thread(..., MPI_THREAD_FUNNELED, ...)` and verify support. Only the initializing thread performs MPI calls. OpenMP worksharing distributes destination grid points among threads. Each thread computes the face fluxes it needs for its own destination cells; do not write shared face-flux arrays from several threads. Complete the worksharing region before the master thread swaps buffers or starts dependent work.
+We start with `MPI_Init_thread(..., MPI_THREAD_FUNNELED, ...)` and verify that the library provides this level. Only the initializing thread performs MPI calls. OpenMP worksharing distributes destination grid points among threads. Each thread computes the face fluxes it needs for its own destination cells; do not write shared face-flux arrays from several threads. Complete the worksharing region before the master thread swaps buffers or starts dependent work.
 
-Support builds without OpenMP by guarding OpenMP-specific calls with the build definition. Do not add global per-step barriers without a demonstrated need; halo completion and local worksharing must already enforce their own dependencies.
+Builds without OpenMP are supported by guarding OpenMP-specific calls with the build definition. We do not add global per-step barriers without a demonstrated need; halo completion and local worksharing already enforce their own dependencies.
+
+### Threads per rank
+
+The number of threads per rank is chosen in this order:
+
+1. the option `--threads N`, if given;
+2. otherwise the environment variable `OMP_NUM_THREADS`;
+3. otherwise one thread, so that a forgotten variable cannot oversubscribe the cores.
+
+We switch off the dynamic adjustment of the thread count, so that the number of threads is the one that was asked for, and we check that all ranks use the same number, because timings with different thread counts per rank would not be comparable. The run records the number of threads actually in use. A build without OpenMP rejects `--threads N` with $N > 1$.
+
+### MPI errors
+
+We set `MPI_ERRORS_RETURN` on `MPI_COMM_WORLD` and on the Cartesian communicator, and check the return code of every MPI call. A failing call becomes an exception that names the call and the MPI error. The exception ends in `main`, which prints the rank and calls `MPI_Abort`. This also stops runs with invalid arguments. Without the abort, the other ranks would wait forever in a collective call for the rank that has failed. A failure of the file output on rank 0 alone, which would leave the other ranks waiting, aborts the job on the spot.
+
+### Nodes
+
+The same number of ranks performs differently on one node and on several. We count the nodes of a run as the number of groups of ranks that can share memory (`MPI_Comm_split_type` with `MPI_COMM_TYPE_SHARED`), and record this number together with the ranks and the threads.
 
 ## Diagnostics
 
@@ -585,7 +603,7 @@ $E$ is the kinetic energy $\frac12\int \lvert\mathbf{u}\rvert^2$, because $\zeta
 
 ## Output and metrics
 
-Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the parameters ($\kappa$, $\nu$ and the wind parameters) and the mass error in the run metadata.
+Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the parameters ($\kappa$, $\nu$ and the wind parameters), the mass error and the number of ranks, threads per rank and nodes actually used in the run metadata.
 
 Time the whole loop, including necessary communication, wall-ghost filling and any per-step velocity evaluation. Synchronize before the timed MPI region and report the maximum elapsed time over ranks. Keep initialization, validation and output timings separate. Phase timings under overlap are diagnostic and must not be blindly added together.
 

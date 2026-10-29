@@ -31,7 +31,8 @@
 struct RunSummary {
     std::string solver;  // "heat_serial" or "heat_parallel"
     int mpi_ranks = 1;
-    int omp_threads = 1;
+    int omp_threads = 1;      // threads per rank actually in use
+    int nodes = 1;            // nodes the ranks run on
     int py = 1;
     int px = 1;
     std::string decomposition = "none";

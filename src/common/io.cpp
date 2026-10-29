@@ -115,6 +115,7 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("t_end", s.t_end);
     json.add("mpi_ranks", s.mpi_ranks);
     json.add("omp_threads", s.omp_threads);
+    json.add("nodes", s.nodes);
     json.add("decomposition", s.decomposition);
     json.add("exchange", s.exchange);
     json.add("py", s.py);
@@ -152,6 +153,11 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
         << "  flow: viscosity = " << c.viscosity << ", wind " << wind_name(c.wind)
         << " F0 = " << c.wind_amplitude;
     if (c.wind == Wind::periodic) out << ", alpha = " << c.wind_alpha << ", period = " << c.wind_period;
+    if (s.solver == "heat_parallel") {
+        out << "\n  parallel: " << s.mpi_ranks << " ranks x " << s.omp_threads << " threads on " << s.nodes
+            << (s.nodes == 1 ? " node, " : " nodes, ") << s.py << " x " << s.px << " process grid, "
+            << s.decomposition << " decomposition, " << s.exchange << " exchange";
+    }
     out << "\n  largest measured speeds: u = " << s.u_max_measured << ", v = " << s.v_max_measured
         << " (estimate --max-speed " << c.max_speed << ")\n"
         << "  energy = " << s.energy << ", enstrophy = " << s.enstrophy << "\n"

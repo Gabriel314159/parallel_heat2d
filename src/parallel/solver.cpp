@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -45,7 +47,7 @@ class MpiComm : public PoissonComm {
 public:
     MpiComm(MPI_Comm comm, HaloExchange& halos) : comm_(comm), halos_(halos) {}
     void sum(double* values, int count) const override {
-        MPI_Allreduce(MPI_IN_PLACE, values, count, MPI_DOUBLE, MPI_SUM, comm_);
+        mpi_check(MPI_Allreduce(MPI_IN_PLACE, values, count, MPI_DOUBLE, MPI_SUM, comm_), "Poisson solver sum");
     }
     void exchange(Field& f) const override { halos_.exchange(f); }
 
@@ -179,7 +181,8 @@ public:
         const Block& b = layout.block;
         const int mine[4] = {b.row_offset, b.col_offset, b.ny, b.nx};
         if (rank_ == 0) blocks_.resize(static_cast<std::size_t>(4) * size_);
-        MPI_Gather(mine, 4, MPI_INT, rank_ == 0 ? blocks_.data() : nullptr, 4, MPI_INT, 0, comm_);
+        mpi_check(MPI_Gather(mine, 4, MPI_INT, rank_ == 0 ? blocks_.data() : nullptr, 4, MPI_INT, 0, comm_),
+                  "gather block sizes");
         if (rank_ == 0) {
             counts_.resize(size_);
             displacements_.resize(size_);
@@ -197,9 +200,10 @@ public:
         const std::vector<double> local = copy_interior(c);
         std::vector<double> received;
         if (rank_ == 0) received.resize(static_cast<std::size_t>(ny_) * nx_);
-        MPI_Gatherv(local.data(), static_cast<int>(local.size()), MPI_DOUBLE, received.data(),
-                    rank_ == 0 ? counts_.data() : nullptr, rank_ == 0 ? displacements_.data() : nullptr, MPI_DOUBLE,
-                    0, comm_);
+        mpi_check(MPI_Gatherv(local.data(), static_cast<int>(local.size()), MPI_DOUBLE, received.data(),
+                              rank_ == 0 ? counts_.data() : nullptr, rank_ == 0 ? displacements_.data() : nullptr,
+                              MPI_DOUBLE, 0, comm_),
+                  "gather field");
         if (rank_ != 0) return {};
 
         std::vector<double> global(static_cast<std::size_t>(ny_) * nx_);
@@ -232,45 +236,45 @@ private:
 
 double sum_over_ranks(double value, MPI_Comm comm) {
     double total = 0.0;
-    MPI_Allreduce(&value, &total, 1, MPI_DOUBLE, MPI_SUM, comm);
+    mpi_check(MPI_Allreduce(&value, &total, 1, MPI_DOUBLE, MPI_SUM, comm), "global sum");
     return total;
 }
 
 double max_over_ranks(double value, MPI_Comm comm) {
     double result = 0.0;
-    MPI_Allreduce(&value, &result, 1, MPI_DOUBLE, MPI_MAX, comm);
+    mpi_check(MPI_Allreduce(&value, &result, 1, MPI_DOUBLE, MPI_MAX, comm), "global maximum");
     return result;
 }
 
-// File output happens on rank 0 only. If it fails, the other ranks would wait
-// forever in the next collective call, so stop the whole job instead.
+// File output happens on rank 0 only. If it fails there, the other ranks
+// would wait forever in the next collective call, and unwinding the stack
+// first would call MPI_Comm_free (a collective call) while they wait. So stop
+// the whole job on the spot, with the message main() would have printed.
 template <typename Action>
 void root_io(const ProcessLayout& layout, Action action) {
     if (layout.rank != 0) return;
     try {
         action();
     } catch (const std::exception& e) {
-        std::cerr << "heat_parallel: error: " << e.what() << "\n";
-        MPI_Abort(layout.comm, 3);
+        std::cerr << "heat_parallel rank " << layout.rank << ": " << e.what() << "\n";
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
 }
 
-int threads_in_use() {
-    int threads = 1;
-#ifdef HEAT2D_USE_OPENMP
-#pragma omp parallel
-    {
-#pragma omp single
-        threads = omp_get_num_threads();
-    }
-#endif
-    return threads;
+// Every rank must run the same number of threads, or the timings and the
+// thread count in the summary would mean nothing.
+void check_same_threads(int threads, MPI_Comm comm) {
+    int lowest = 0;
+    int highest = 0;
+    mpi_check(MPI_Allreduce(&threads, &lowest, 1, MPI_INT, MPI_MIN, comm), "thread count minimum");
+    mpi_check(MPI_Allreduce(&threads, &highest, 1, MPI_INT, MPI_MAX, comm), "thread count maximum");
+    if (lowest != highest) throw std::runtime_error("all ranks must use the same number of threads");
 }
 
 std::string mpi_library() {
     char version[MPI_MAX_LIBRARY_VERSION_STRING];
     int length = 0;
-    MPI_Get_library_version(version, &length);
+    mpi_check(MPI_Get_library_version(version, &length), "MPI_Get_library_version");
     std::string text(version, static_cast<std::size_t>(length));
     const std::size_t end = text.find_first_of("\n,");
     return end == std::string::npos ? text : text.substr(0, end);
@@ -278,10 +282,35 @@ std::string mpi_library() {
 
 }  // namespace
 
+int configure_threads(int requested) {
+    int actual = 1;
+#ifdef HEAT2D_USE_OPENMP
+    omp_set_dynamic(0);
+    if (requested > 0) {
+        omp_set_num_threads(requested);
+    } else if (!std::getenv("OMP_NUM_THREADS")) {
+        omp_set_num_threads(1);
+    }
+#pragma omp parallel
+    {
+#pragma omp single
+        actual = omp_get_num_threads();
+    }
+#else
+    if (requested > 1) throw std::invalid_argument("this executable was built without OpenMP");
+#endif
+    return actual;
+}
+
 ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     ProcessLayout layout = make_layout(cfg, world);
     const LayoutGuard guard(layout);
     const Block& b = layout.block;
+
+    // Before the first OpenMP region, so that all loops below use this count.
+    const int threads = configure_threads(cfg.threads.value_or(0));
+    check_same_threads(threads, layout.comm);
+    const int nodes = count_nodes(layout);
 
     const double dx = cfg.lx / cfg.nx;
     const double dy = cfg.ly / cfg.ny;
@@ -305,7 +334,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
             double local[2] = {0.0, 0.0};
             max_face_speeds(vel, local[0], local[1]);
             double global[2] = {0.0, 0.0};
-            MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_MAX, layout.comm);
+            mpi_check(MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_MAX, layout.comm), "speed check");
             u_seen = std::max(u_seen, global[0]);
             v_seen = std::max(v_seen, global[1]);
             check_time_step(cfg, dt, global[0], global[1]);
@@ -322,7 +351,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
         poisson_iterations += work.iterations;
         poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
     };
-    MPI_Barrier(layout.comm);
+    mpi_check(MPI_Barrier(layout.comm), "barrier before the spin-up");
     const double spinup_start = MPI_Wtime();
     for (long s = 0; s < spinup; ++s) {
         flow_step(s);
@@ -364,7 +393,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
         });
     }
 
-    MPI_Barrier(layout.comm);
+    mpi_check(MPI_Barrier(layout.comm), "barrier before the timed loop");
     const double start = MPI_Wtime();
     for (int n = 0; n < cfg.steps; ++n) {
         // 1. Pigment with the velocities of psi^n.
@@ -416,12 +445,12 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
         s.cosine_continuous_error = max_over_ranks(errors.continuous, layout.comm);
     }
     result.field = gatherer.gather(current);
-    const int threads = threads_in_use();
     const std::string library = mpi_library();
 
     s.solver = "heat_parallel";
     s.mpi_ranks = layout.size;
     s.omp_threads = threads;
+    s.nodes = nodes;
     s.py = layout.py;
     s.px = layout.px;
     s.decomposition = decomp_name(cfg.decomposition);

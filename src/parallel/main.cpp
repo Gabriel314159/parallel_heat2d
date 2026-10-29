@@ -15,20 +15,23 @@
 int main(int argc, char** argv) {
     // FUNNELED: threads exist, but only the thread that initialized MPI calls it.
     int provided = 0;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
-    int rank = 0;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided) != MPI_SUCCESS) {
+        std::cerr << "heat_parallel: MPI initialization failed.\n";
+        return 1;
+    }
+    int world_rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    // A failing MPI call now returns an error code, which mpi_check turns into
+    // an exception, instead of aborting on the spot.
+    MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 
-    int exit_code = 0;
-    if (wants_help(argc, argv)) {
-        if (rank == 0) std::cout << usage("heat_parallel");
-    } else {
-        // Every rank parses the same arguments, so invalid input fails on all
-        // ranks alike and they all reach MPI_Finalize.
-        try {
-            if (provided < MPI_THREAD_FUNNELED) {
-                throw std::runtime_error("the MPI library does not provide MPI_THREAD_FUNNELED");
-            }
+    try {
+        if (provided < MPI_THREAD_FUNNELED) {
+            throw std::runtime_error("the MPI library does not provide MPI_THREAD_FUNNELED");
+        }
+        if (wants_help(argc, argv)) {
+            if (world_rank == 0) std::cout << usage("heat_parallel");
+        } else {
             const Config cfg = parse_args(argc, argv);
             validate(cfg);
 
@@ -40,14 +43,14 @@ int main(int argc, char** argv) {
                     write_text_file(replace_extension(cfg.output, ".json"), summary_json(cfg, result.summary) + "\n");
                 }
             }
-        } catch (const std::exception& e) {
-            if (rank == 0) {
-                std::cerr << "heat_parallel: error: " << e.what() << "\n"
-                          << "Run heat_parallel --help for the options.\n";
-            }
-            exit_code = 2;
         }
+    } catch (const std::exception& e) {
+        // A failure on any rank stops all ranks. Otherwise the others would
+        // wait forever in a collective call for the rank that has failed.
+        std::cerr << "heat_parallel rank " << world_rank << ": " << e.what() << "\n";
+        MPI_Abort(MPI_COMM_WORLD, 1);
+        return 1;
     }
     MPI_Finalize();
-    return exit_code;
+    return 0;
 }

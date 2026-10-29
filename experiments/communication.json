@@ -1,0 +1,17 @@
+{
+  "schema_version": 5,
+  "kind": "strategies",
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 4: communication strategy. The fixed problem P on 16 ranks x 1 thread, with row or 2D decomposition and blocking or overlapping pigment exchange (four runs). The layout stays at pure MPI, where communication matters most. Note that --exchange applies to the pigment halo only; see docs/experiment_plan.md.",
+  "execution": {"backend": "parallel"},
+  "total_cores": 16,
+  "resources": [
+    {"mpi_ranks": 16, "omp_threads": 1}
+  ],
+  "decompositions": ["rows", "2d"],
+  "exchanges": ["blocking", "overlap"],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/communication", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/communication.csv"
+}

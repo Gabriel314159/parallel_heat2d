@@ -1,8 +1,8 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "kind": "correctness",
   "defaults": "../config/defaults.json",
-  "description": "Small-field checks against matching serial references, with the computed wind-driven flow and no-flux walls. A short spin-up at Re of about 50 (viscosity 0.02, wind 0.62) gives a developed flow on these coarse grids.",
+  "description": "Experiment 0 (the gate before any timing): small-field checks against matching serial references, with the computed wind-driven flow and no-flux walls. A short spin-up at Re of about 50 (viscosity 0.02, wind 0.62) gives a developed flow on these coarse grids.",
   "checks": {
     "serial_parallel_atol": 1e-10,
     "serial_parallel_rtol": 1e-10,
@@ -18,6 +18,21 @@
       "name": "pigment_one_rank",
       "problem": {"nx": 32, "ny": 24, "steps": 50},
       "execution": {"backend": "parallel", "mpi_ranks": 1, "omp_threads": 1, "decomposition": "rows", "exchange": "blocking"}
+    },
+    {
+      "name": "mpi_only_rows",
+      "problem": {"nx": 37, "ny": 29, "steps": 50},
+      "execution": {"backend": "parallel", "mpi_ranks": 3, "omp_threads": 1, "decomposition": "rows", "exchange": "blocking"}
+    },
+    {
+      "name": "mpi_only_2d",
+      "problem": {"nx": 37, "ny": 29, "steps": 50},
+      "execution": {"backend": "parallel", "mpi_ranks": 6, "omp_threads": 1, "decomposition": "2d", "exchange": "blocking", "process_grid": [2, 3]}
+    },
+    {
+      "name": "openmp_only",
+      "problem": {"nx": 37, "ny": 29, "steps": 50},
+      "execution": {"backend": "parallel", "mpi_ranks": 1, "omp_threads": 4, "decomposition": "rows", "exchange": "blocking"}
     },
     {
       "name": "uneven_rows_blocking",

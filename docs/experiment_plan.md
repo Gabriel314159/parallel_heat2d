@@ -8,7 +8,7 @@ Status: planned. No checks or benchmarks are claimed as completed.
 
 For each small case, compare the final full matrix from `heat_serial` with each selected parallel strategy. Use identical global grid dimensions, geometry, diffusivity, flow parameters, initial condition, time step, step count and precision. Compare with an absolute and relative tolerance, initially `1e-10` each, and record the observed error.
 
-Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both row and 2D decompositions, and both blocking and overlap modes. Run these with the computed flow switched on (a short spin-up, then the pigment), mostly with the steady wind plus one case with the periodic wind.
+Test one rank, several ranks, multiple threads, non-divisible dimensions and very small local blocks. Include both row and 2D decompositions, and both blocking and overlap modes. The cases cover MPI only (several ranks, one thread), OpenMP only (one rank, several threads) and MPI + OpenMP, so that every layout of the performance experiments is checked before it is timed; `scripts/check_correctness.py` labels each run with its layout. Run these with the computed flow switched on (a short spin-up, then the pigment), mostly with the steady wind plus one case with the periodic wind.
 
 ### Mass conservation
 
@@ -85,14 +85,16 @@ The discrete steady state (two Poisson solves) must converge to it at second ord
 - Keep allocation, initial setup, field gathering, output, plotting and checking outside the loop timer.
 - Put an MPI barrier immediately before timing, then reduce rank-local elapsed times with `MPI_MAX` after the timed loop.
 - Perform one warmup and five measured repetitions initially. Preserve every repetition and report a median plus variation.
-- Record actual MPI ranks, OpenMP threads, node count, binding, libraries, hardware and Git commit.
+- Record actual MPI ranks, OpenMP threads, node count, binding, libraries, hardware and Git commit. The solvers report the ranks, threads and nodes they used; the binding comes from the launcher and must be recorded separately.
 - Allocate enough CPUs and memory for the largest layout. Avoid oversubscription and unrelated concurrent runs.
 
 Optional phase timers should clearly distinguish wait time from complete communication time. Under overlap, diagnostic phase times are not additive estimates of total runtime.
 
-## Strong scaling
+## Performance experiments
 
-Hold the full discrete problem fixed and increase resources. The initial manifest isolates rank scaling at one thread per rank. Measure a pure serial reference separately.
+The five experiments are listed in [experiments/README.md](../experiments/README.md). Each one changes one factor and keeps the others at the baseline (2D decomposition, blocking exchange and one thread per rank, unless the experiment changes it), so that a difference in time can be attributed to that factor. Experiments 1 to 4 solve the same fixed problem $P$ (`experiments/benchmark_problem.json`), so one serial reference serves all of them. They run only after the correctness checks have passed with the same build on the same machine.
+
+The grid and the number of steps of $P$ are provisional. They are chosen so that a serial run takes a few minutes on a laptop (the first step took 1.7 s). With the conjugate gradient solver, the cost of a run grows about 8× each time the grid doubles in both directions, so time one run on Atlas or Vanda and adjust them in `benchmark_problem.json`.
 
 ```text
 speedup S(p) = median_serial_time / median_parallel_time(p)
@@ -102,7 +104,25 @@ p = MPI ranks * OpenMP threads per rank
 
 The denominator counts physical CPU cores when one thread is bound to each physical core. Record SMT use explicitly if tested. Do not describe a one-rank MPI run as the pure serial implementation.
 
-## Weak scaling
+### 1. Serial vs MPI (strong scaling over ranks)
+
+Hold $P$ fixed and increase the number of ranks, with one thread per rank. Report the runtime, $S(p)$ and $E(p)$ against the pure serial program. The one-rank run shows what the MPI setup and the halo code cost on their own, when compared with the serial run.
+
+### 2. Serial vs OpenMP (strong scaling over threads)
+
+Hold $P$ fixed on one rank and increase the number of threads. Report the same quantities. The conjugate gradient loops read and write large arrays with little arithmetic per value, so memory bandwidth may limit the speedup. Bind each thread to a core and record the binding.
+
+### 3. Pure MPI vs MPI + OpenMP
+
+Fix the number of cores at 16 and change how they are split between ranks and threads, from 16 ranks × 1 thread to 1 rank × 16 threads. Report the runtime of each layout and its ratio to pure MPI. Inspect the local block dimensions and the exposed boundary lengths. A layout with less communication is not guaranteed to be faster if it changes message overhead, local threading efficiency or memory placement.
+
+### 4. Communication strategy
+
+At 16 ranks with one thread each, compare row and 2D decomposition, and blocking and overlapping exchange, in four runs. Rows give each rank two neighbours and long messages; 2D blocks give up to four neighbours and shorter messages, and the columns are packed before sending.
+
+What this experiment can show is limited. `--exchange` changes only the halo exchange of the pigment, which happens once per step. The Poisson solve exchanges halos once per conjugate gradient iteration, hundreds of times per step, and always blocks. It takes about 99% of the run time (informal laptop measurement, 4 ranks, 256 × 512 cells: 99.2%), and the blocking and overlapping runs differed by less than the run-to-run noise. Expect no visible difference between blocking and overlap until the Poisson solve overlaps its own exchange. The decomposition, in contrast, changes the messages of every iteration. Report what is measured, and do not claim that overlap is faster before measuring it.
+
+### 5. Weak scaling
 
 Keep a 512-by-512 interior block and four threads per rank, then use 1, 4 and 16 ranks with square process grids. Keep `dx` and `dy` fixed and grow the physical domain according to the configuration rules. Keep the flow settings and the speed estimate `--max-speed` fixed, so that `dt` and the step count are the same for every run. The pigment and vorticity updates then do the same work per core in every run, but the Poisson solve does not: the number of CG iterations per step grows with the global grid (about doubling when the grid doubles in each direction). Record the CG iterations and the Poisson time, and report the time per CG iteration alongside the total time.
 
@@ -112,20 +132,14 @@ weak-scaling efficiency = median_time(reference_resources) / median_time(larger_
 
 The reference here is one MPI rank with four threads, not the single-threaded serial executable. Report this baseline explicitly. Weak scaling does not compare the same physical domain at different resolutions.
 
-## Resource layout and communication
-
-At 16 total cores, compare explicit rank/thread combinations. For each resource layout, compare row and 2D decomposition, and blocking and overlap communication. Change one factor at a time when explaining a result.
-
-Inspect local block dimensions and exposed boundary lengths. A layout with less communication is not guaranteed to be faster if it changes message overhead, local threading efficiency or memory placement.
-
 ## Planned figures
 
 - Pigment field for a small demonstration case, with an optional velocity overlay.
 - Maximum absolute serial/parallel difference for validation cases.
 - Relative mass change for the validation cases.
 - Analytical error versus resolution for the cosine case.
-- Runtime, speedup and efficiency versus total cores for strong scaling.
-- Runtime or weak-scaling efficiency versus resources for weak scaling.
-- Fixed-core comparison of rank/thread layouts and communication strategies.
+- Runtime, speedup and efficiency versus ranks (experiment 1) and versus threads (experiment 2).
+- Runtime of each rank/thread layout at 16 cores (experiment 3) and of the four decomposition and exchange variants (experiment 4).
+- Weak-scaling efficiency and time per CG iteration versus ranks (experiment 5).
 
 Use only retained, measured data. Label the machine, grid, steps, resource definition and timing scope. Separate observations from proposed explanations.

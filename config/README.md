@@ -59,7 +59,7 @@ These apply to the parallel solver, `heat_parallel`; `heat_serial` ignores them 
 | --- | --- | --- |
 | `execution.backend` | Executable selection | `serial` or `parallel`. |
 | `execution.mpi_ranks` | MPI launch option | Number of MPI ranks. |
-| `execution.omp_threads` | `OMP_NUM_THREADS` | Threads per rank; also verify the actual number used. |
+| `execution.omp_threads` | `OMP_NUM_THREADS` (set by the scripts) or `--threads` | Threads per rank. `--threads N` overrides `OMP_NUM_THREADS`; with neither, 1. The run reports the number actually used (`omp_threads`) and the number of nodes (`nodes`). |
 | `execution.decomposition` | `--decomp` | `rows` or `2d`. |
 | `execution.exchange` | `--exchange` | `blocking` or `overlap`. |
 | `execution.process_grid` | `--py`, `--px` | Optional `[py, px]`; `py*px` must equal the number of ranks. |
@@ -84,6 +84,6 @@ Validation dumps are small. Large benchmark runs should normally disable snapsho
 
 ## Defaults and overrides
 
-An experiment's `defaults` path is relative to that experiment JSON file. Load the defaults, then recursively merge object fields from the experiment and the individual run. Scalars and arrays replace previous values. The runner must not pass experiment metadata such as `schema_version`, `checks` or `repetitions` to the solver.
+An experiment's `defaults` path is relative to that experiment JSON file. A defaults file may itself name a `defaults` file: the performance experiments inherit `experiments/benchmark_problem.json`, which inherits `config/defaults.json`. Resolve the chain from the inside out (`resolve_base` in `scripts/heat2d_tools.py`), then recursively merge object fields from the experiment and the individual run. `schema_version` has the same number (5) in `config/defaults.json` and in every experiment file. Scalars and arrays replace previous values. The runner must not pass experiment metadata such as `schema_version`, `checks` or `repetitions` to the solver.
 
 Experiment files define explicit resource lists or explicit run lists. Do not silently interpret lists of ranks and threads as a Cartesian product unless that file says so. Save the fully resolved configuration with each measurement.

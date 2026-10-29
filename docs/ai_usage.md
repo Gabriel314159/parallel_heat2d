@@ -30,6 +30,14 @@ On 28 October 2026, Anthropic Claude (Claude Code, local session; Claude Opus 5.
 
 Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
 
+On 29 October 2026, Anthropic Claude (Claude Code, local session; Claude Sonnet 5.5 and Claude Opus 5.5) prepared a comparison of this branch with `origin/main` and, at the team's request, aligned the MPI/OpenMP conventions of the parallel solver with those of `main` and reorganized the experiments:
+
+- Cartesian communicator created without rank reordering; MPI initialization and `main` restructured to follow `main` (`MPI_ERRORS_RETURN`, an `mpi_check` wrapper around every MPI call, `MPI_Abort` on any exception); the thread count taken from `--threads`, else `OMP_NUM_THREADS`, else 1, with a check that all ranks agree; the node count from a shared-memory communicator split. Files: `src/parallel/*`, `src/common/config.*`, `src/common/io.*`, `src/serial/main.cpp`, `CMakeLists.txt`, `tests/test_halo.cpp`, `tests/test_config.cpp`, `scripts/check_correctness.py` and the documentation.
+- Checks run during the session (Apple M-series laptop, Open MPI 5.0): the thread-count rules (flag only, environment only, both, neither) and the node count on the command line; failure paths (unknown option, invalid process grid, a failure on rank 0 only, different thread counts on different ranks), each stopping within about a second with exit code 1; new `ctest` entries for the thread rules and new `test_halo` and `test_config` checks; all 16 `ctest` entries pass. The rank-identity check in `test_halo` passed with `reorder = 1` as well on this single-node Open MPI, so it checks the property but would not catch a flipped flag here.
+- Experiments: at the team's request, reorganized `experiments/` into one correctness gate and five performance experiments that each change one factor (serial vs MPI, serial vs OpenMP, pure MPI vs MPI + OpenMP, communication strategy, weak scaling). The three-factor `strategies.json` was split into two files, one shared problem file replaced the copies of the problem, the benchmark grid (2048 × 4096, 1000 steps) was reduced to a provisional 512 × 1024 and 100 steps, and the correctness cases gained MPI-only and OpenMP-only runs. Checks run: all experiment files expanded with the benchmark runner of `origin/main`, every distinct configuration accepted by the real solvers (one step), and all 12 correctness cases passed. A short laptop measurement (Poisson solve 99.2% of the run time; blocking and overlapping runs differing less than the noise) is recorded in the plan as the reason experiment 4 is limited.
+
+Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
+
 ## Append future entries
 
 For each substantial use, record:

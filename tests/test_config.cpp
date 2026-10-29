@@ -106,6 +106,13 @@ int main() {
         check(spinup_steps(c, 0.1) == 15, "spin-up steps = spinup / dt");
     }
     {
+        // --threads is optional: empty means "OMP_NUM_THREADS, or one thread".
+        check(!parse({}).threads, "threads is unset by default");
+        const Config c = parse({"--threads", "4"});
+        validate(c);
+        check(c.threads && *c.threads == 4, "--threads 4");
+    }
+    {
         Config c = parse({"--max-speed", "10"});
         const double limit = stable_dt(c, 10, 10);
         c = parse({"--max-speed", "10", "--dt", std::to_string(limit / 2)});
@@ -132,6 +139,9 @@ int main() {
     expect_rejected({"--case", "cosine_decay"}, "cosine_decay with the wind on");
     expect_rejected({"--case", "heated_top"}, "removed case name");
     expect_rejected({"--flow-amplitude", "0.1"}, "removed double-gyre option");
+    expect_rejected({"--threads", "0"}, "zero threads");
+    expect_rejected({"--threads", "-2"}, "negative threads");
+    expect_rejected({"--threads", "many"}, "threads that is not a number");
     expect_rejected({"--bogus", "3"}, "unknown flag");
     expect_rejected({"--nx"}, "flag without a value");
     expect_rejected({"--kappa", "abc"}, "value that is not a number");

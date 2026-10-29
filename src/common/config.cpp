@@ -89,13 +89,15 @@ std::string usage(const std::string& program) {
         "  --snapshot-coarsen K    shrink snapshots by K in each direction (default 1)\n"
         "  -h, --help              show this help\n"
         "\n"
-        "Parallel execution (heat_parallel only; threads per rank come from OMP_NUM_THREADS)\n"
+        "Parallel execution (heat_parallel only)\n"
         "  --decomp rows|2d        split rows only, or a 2D process grid (default rows)\n"
         "  --exchange blocking|overlap\n"
         "                          blocking pigment halo exchange, or nonblocking with computation\n"
         "                          of the interior while messages travel (default blocking)\n"
         "  --py N, --px N          process grid rows and columns for --decomp 2d\n"
-        "                          (default: chosen automatically)\n";
+        "                          (default: chosen automatically)\n"
+        "  --threads N             OpenMP threads per rank; overrides OMP_NUM_THREADS\n"
+        "                          (default: OMP_NUM_THREADS, or 1 if it is not set)\n";
 }
 
 std::string wind_name(Wind w) {
@@ -170,6 +172,7 @@ Config parse_args(int argc, char** argv) {
         else if (flag == "--exchange") c.exchange = parse_exchange(value_after(k, argc, argv));
         else if (flag == "--py") c.py = std::stoi(value_after(k, argc, argv));
         else if (flag == "--px") c.px = std::stoi(value_after(k, argc, argv));
+        else if (flag == "--threads") c.threads = std::stoi(value_after(k, argc, argv));
         else throw std::invalid_argument("unknown option: " + flag);
     }
     return c;
@@ -243,6 +246,9 @@ void validate(const Config& c) {
     }
     if (c.py > 0 && c.decomposition != Decomp::two_d) {
         throw std::invalid_argument("--py and --px apply to --decomp 2d only");
+    }
+    if (c.threads && *c.threads < 1) {
+        throw std::invalid_argument("--threads must be at least 1");
     }
     if (!c.output.empty()) {
         const std::string::size_type dot = c.output.rfind('.');

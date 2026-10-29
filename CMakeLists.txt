@@ -120,6 +120,28 @@ if(HEAT2D_BUILD_TESTS)
                                  $<TARGET_FILE:test_halo>)
             endforeach()
             set(HEAT2D_MPIEXEC_FLAGS "" CACHE STRING "Extra flags for mpiexec in the parallel correctness test")
+
+            # How heat_parallel picks its threads per rank: --threads, else
+            # OMP_NUM_THREADS, else 1. Tiny runs; the RESULT line must report
+            # the number of threads actually in use.
+            set(HEAT2D_THREAD_RUN ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${HEAT2D_MPIEXEC_FLAGS}
+                $<TARGET_FILE:heat_parallel> --nx 16 --ny 32 --steps 2 --spinup 0.01)
+            if(OpenMP_CXX_FOUND)
+                add_test(NAME threads_flag COMMAND ${HEAT2D_THREAD_RUN} --threads 3)
+                set_tests_properties(threads_flag PROPERTIES PASS_REGULAR_EXPRESSION "\"omp_threads\": 3,")
+                add_test(NAME threads_flag_beats_env COMMAND ${HEAT2D_THREAD_RUN} --threads 2)
+                set_tests_properties(threads_flag_beats_env PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=4"
+                                     PASS_REGULAR_EXPRESSION "\"omp_threads\": 2,")
+                add_test(NAME threads_from_env COMMAND ${HEAT2D_THREAD_RUN})
+                set_tests_properties(threads_from_env PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=3"
+                                     PASS_REGULAR_EXPRESSION "\"omp_threads\": 3,")
+                add_test(NAME threads_default COMMAND ${CMAKE_COMMAND} -E env --unset=OMP_NUM_THREADS ${HEAT2D_THREAD_RUN})
+                set_tests_properties(threads_default PROPERTIES PASS_REGULAR_EXPRESSION "\"omp_threads\": 1,")
+            else()
+                add_test(NAME threads_without_openmp COMMAND ${HEAT2D_THREAD_RUN} --threads 2)
+                set_tests_properties(threads_without_openmp PROPERTIES PASS_REGULAR_EXPRESSION "built without OpenMP")
+            endif()
+
             add_test(NAME correctness_parallel
                      COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"
                              --build-dir "${CMAKE_BINARY_DIR}"

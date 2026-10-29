@@ -1,85 +1,21 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "kind": "weak_scaling",
-  "defaults": "../config/defaults.json",
-  "description": "Fixed local cells and threads per rank with fixed spatial spacing; the physical domain grows as lx = px*local_nx*dx, ly = py*local_ny*dy. The flow settings and the speed estimate are fixed, so dt is the same for every run.",
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 5: weak scaling. A fixed 512 x 512 block and 4 threads per rank on 1, 4 and 16 ranks. The spacing dx, dy is fixed and the physical domain grows (lx = px*local_nx*dx, ly = py*local_ny*dy), so dt and the number of steps are the same for every run. The flow and pigment settings and the number of steps come from benchmark_problem.json; the grid and the blob centre are set per resource.",
   "local_nx": 512,
   "local_ny": 512,
-  "spacing": {
-    "dx": 0.001,
-    "dy": 0.001
-  },
-  "problem": {
-    "steps": 1000,
-    "kappa": 0.0001,
-    "case": "pigment_drop",
-    "background": 0.0,
-    "amplitude": 1.0,
-    "blob_width": 0.05,
-    "max_speed": 2.0,
-    "check_interval": 100,
-    "viscosity": 0.001,
-    "wind": "steady",
-    "wind_amplitude": 0.1,
-    "wind_alpha": 0.0,
-    "wind_period": 1.0,
-    "spinup": 0.0
-  },
-  "execution": {
-    "backend": "parallel"
-  },
+  "spacing": {"dx": 0.001, "dy": 0.001},
+  "execution": {"backend": "parallel"},
   "decomposition": "2d",
   "exchange": "blocking",
   "resources": [
-    {
-      "mpi_ranks": 1,
-      "omp_threads": 4,
-      "process_grid": [
-        1,
-        1
-      ],
-      "problem": {
-        "blob_centre": [
-          0.256,
-          0.256
-        ]
-      }
-    },
-    {
-      "mpi_ranks": 4,
-      "omp_threads": 4,
-      "process_grid": [
-        2,
-        2
-      ],
-      "problem": {
-        "blob_centre": [
-          0.512,
-          0.512
-        ]
-      }
-    },
-    {
-      "mpi_ranks": 16,
-      "omp_threads": 4,
-      "process_grid": [
-        4,
-        4
-      ],
-      "problem": {
-        "blob_centre": [
-          1.024,
-          1.024
-        ]
-      }
-    }
+    {"mpi_ranks": 1, "omp_threads": 4, "process_grid": [1, 1], "problem": {"blob_centre": [0.256, 0.256]}},
+    {"mpi_ranks": 4, "omp_threads": 4, "process_grid": [2, 2], "problem": {"blob_centre": [0.512, 0.512]}},
+    {"mpi_ranks": 16, "omp_threads": 4, "process_grid": [4, 4], "problem": {"blob_centre": [1.024, 1.024]}}
   ],
   "warmup_runs": 1,
   "repetitions": 5,
-  "output": {
-    "directory": "outputs/weak_scaling",
-    "write_field": false,
-    "snapshot_interval": 0
-  },
+  "output": {"directory": "outputs/weak_scaling", "write_field": false, "snapshot_interval": 0},
   "metrics_csv": "results/raw/weak_scaling.csv"
 }

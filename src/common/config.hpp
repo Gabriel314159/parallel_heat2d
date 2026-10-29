@@ -83,6 +83,10 @@ struct Config {
     Exchange exchange = Exchange::blocking;
     int py = 0;
     int px = 0;
+
+    // OpenMP threads per rank. Empty means "use OMP_NUM_THREADS, or one
+    // thread if that is not set". heat_serial accepts 1 only.
+    std::optional<int> threads;
 };
 
 // The command-line help text.

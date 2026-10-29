@@ -34,7 +34,7 @@ Identify Atlas or Vanda, CPU/node details, compiler and library versions, build 
 
 ## 6. Runtime, scaling and efficiency
 
-Insert measured figures and discuss strong scaling, weak scaling and fixed-core strategy comparisons. State the baseline for every speedup or efficiency plot. Keep raw-data references and uncertainty visible.
+Insert measured figures and discuss the five experiments of `experiments/README.md`: serial vs MPI (strong scaling), serial vs OpenMP, pure MPI vs MPI + OpenMP, communication strategies and weak scaling. State the baseline for every speedup or efficiency plot. Keep raw-data references and uncertainty visible.
 
 ## 7. Discussion and limitations
 

@@ -28,21 +28,31 @@ import shlex
 import sys
 from pathlib import Path
 
-from heat2d_tools import REPO, deep_merge, executable, load_json, problem_args, read_field_csv, run_solver
+from heat2d_tools import (REPO, SHARED_KEYS, deep_merge, executable, load_json, problem_args, read_field_csv,
+                          resolve_base, run_solver)
 
 
 def resolve_runs(experiment_path: Path) -> list[dict]:
     """Defaults, then the experiment-level overrides, then each run's overrides."""
     experiment = load_json(experiment_path)
-    defaults = load_json((experiment_path.parent / experiment["defaults"]).resolve())
-    shared = {key: experiment[key] for key in ("problem", "execution", "output") if key in experiment}
-    base = deep_merge(defaults, shared)
+    base = resolve_base(experiment_path)
     runs = []
     for run in experiment["runs"]:
-        resolved = deep_merge(base, {key: run[key] for key in ("problem", "execution", "output") if key in run})
+        resolved = deep_merge(base, {key: run[key] for key in SHARED_KEYS if key in run})
         resolved["name"] = run["name"]
         runs.append(resolved)
     return runs
+
+
+def layout_kind(ranks: int, threads: int) -> str:
+    """Which of the compared layouts of experiments 1 to 3 a run exercises."""
+    if ranks == 1 and threads == 1:
+        return "one rank, one thread"
+    if threads == 1:
+        return "MPI only"
+    if ranks == 1:
+        return "OpenMP only"
+    return "MPI + OpenMP"
 
 
 def parallel_args(execution: dict) -> list[str]:
@@ -132,12 +142,22 @@ def main() -> int:
                     command = [*shlex.split(args.launcher.format(ranks=ranks)), str(parallel_path),
                                *problem_args(problem), *parallel_args(execution), "--output", str(parallel_csv)]
                     try:
-                        run_solver(command, threads=threads)
+                        launched = run_solver(command, threads=threads)
                         worst, within = max_field_difference(
                             read_field_csv(parallel_csv), read_field_csv(serial_csv),
                             checks["serial_parallel_atol"], checks["serial_parallel_rtol"])
                         results.append(("serial vs parallel", within,
-                                        f"max |difference| = {worst:.2e} ({ranks} ranks x {threads} threads)"))
+                                        f"max |difference| = {worst:.2e} "
+                                        f"({ranks} ranks x {threads} threads: {layout_kind(ranks, threads)})"))
+                        # The run reports what it used. A different rank count is an error; a different
+                        # thread count only means that heat_parallel was built without OpenMP.
+                        if launched["mpi_ranks"] != ranks:
+                            results.append(("MPI ranks", False,
+                                            f"requested {ranks}, the run used {launched['mpi_ranks']}"))
+                        if launched["omp_threads"] != threads:
+                            results.append(("OpenMP threads", None,
+                                            f"requested {threads}, the run used {launched['omp_threads']} "
+                                            f"(is heat_parallel built without OpenMP?)"))
                     except (RuntimeError, ValueError) as error:
                         results.append(("parallel run", False, str(error)))
 

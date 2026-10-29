@@ -71,7 +71,7 @@ OMP_NUM_THREADS=2 mpiexec -n 4 ./build/heat_parallel --nx 256 --ny 256 --steps 1
     --decomp 2d --exchange overlap --output outputs/final_parallel.csv
 ```
 
-Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--exchange blocking|overlap` and `--py N --px N` for a fixed process grid. Each run prints a short report and ends with a `RESULT {...}` line of JSON: all parameters, `dt`, the solver-loop time (the maximum over ranks), the relative mass change and the Péclet numbers. With `--output`, the final field is written as CSV (or as binary `.npy` if the path ends in `.npy`) and the same JSON is written next to it. [config/README.md](config/README.md) lists every option.
+Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--exchange blocking|overlap`, `--py N --px N` for a fixed process grid, and `--threads N` for the OpenMP threads per rank. Each run prints a short report and ends with a `RESULT {...}` line of JSON: all parameters, `dt`, the solver-loop time (the maximum over ranks), the relative mass change and the Péclet numbers. With `--output`, the final field is written as CSV (or as binary `.npy` if the path ends in `.npy`) and the same JSON is written next to it. [config/README.md](config/README.md) lists every option.
 
 | Mode | Purpose |
 | --- | --- |
@@ -81,7 +81,7 @@ Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--
 | `heat_parallel --exchange blocking` | Halo exchange with `MPI_Sendrecv`, then the update. |
 | `heat_parallel --exchange overlap` | Nonblocking halo exchange; the interior is updated while messages travel. |
 
-Set `OMP_NUM_THREADS=1` for an MPI-only baseline. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
+Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used. If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
 
 ## Preview the dynamics
 
@@ -127,7 +127,7 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 | [tests/](tests/) | C++ unit tests, run by `ctest`. |
 | [scripts/](scripts/README.md) | Correctness checks, plotting and animation; planned benchmark tools. |
 | [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
-| [experiments/](experiments/README.md) | Correctness and performance experiment configurations. |
+| [experiments/](experiments/README.md) | The correctness check and the five performance experiments, with the shared benchmark problem. |
 | [hpc/](hpc/README.md) | HPC setup notes and job templates. |
 | [results/raw/](results/raw/README.md) | Measured benchmark CSV files, when available. |
 | [results/figures/](results/figures/README.md) | Selected figures generated from measured data. |
@@ -144,7 +144,7 @@ Solver output goes to `outputs/`, which Git ignores.
 - Compare full scalar fields from serial and parallel runs of the same problem.
 - Check mass conservation, constant fields under the flow, non-divisible partitions and small local blocks.
 - Use a decaying cosine mode (flow off) for an independent analytical check and mesh refinement study.
-- Measure strong scaling, weak scaling, rank/thread allocation and communication strategies.
+- Run the five performance experiments of [experiments/](experiments/README.md): serial vs MPI (strong scaling), serial vs OpenMP, pure MPI vs MPI + OpenMP, communication strategies and weak scaling.
 - Exclude file I/O and validation from solver-loop timing, and report them separately where useful.
 - Use the maximum elapsed time across MPI ranks as parallel runtime.
 - Preserve raw timings, environment details and the exact commit used.

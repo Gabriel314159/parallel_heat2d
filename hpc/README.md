@@ -20,9 +20,9 @@ Do not assume that a generic `mpiexec` command or scheduler header is valid on e
 ## Run sequence after implementation
 
 1. Build in Release mode with the selected compiler and MPI environment.
-2. Run a small serial/parallel validation case inside an allocation.
-3. Verify the CPU allocation, actual thread count and rank placement.
-4. Run planned warmups and measured repetitions without unrelated concurrent work.
+2. Run the correctness checks (experiment 0, `scripts/check_correctness.py`) inside an allocation. The timings are only believed if they pass with this build on this machine.
+3. Verify the CPU allocation, actual thread count and rank placement. The run report and the `RESULT` line give the ranks, threads and nodes the solver actually used; binding is not reported and must be checked separately.
+4. Run experiments 1 to 5 of [experiments/README.md](../experiments/README.md), in that order, with the planned warmups and measured repetitions and without unrelated concurrent work. Time one run of the benchmark problem first, and adjust its size in `experiments/benchmark_problem.json` if needed.
 5. Copy compact raw metrics and environment records into `results/raw/`.
 6. Generate figures from those metrics and cite the exact commit/configuration in the report.
 

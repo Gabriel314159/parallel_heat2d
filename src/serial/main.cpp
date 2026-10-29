@@ -3,6 +3,7 @@
 
 #include <exception>
 #include <iostream>
+#include <stdexcept>
 
 #include "common/config.hpp"
 #include "common/io.hpp"
@@ -16,6 +17,9 @@ int main(int argc, char** argv) {
     try {
         const Config cfg = parse_args(argc, argv);
         validate(cfg);
+        if (cfg.threads && *cfg.threads > 1) {
+            throw std::invalid_argument("heat_serial always uses one thread");
+        }
         if (has_parallel_options(cfg)) {
             std::cerr << "heat_serial: note: --decomp, --exchange, --py and --px are ignored (heat_parallel only)\n";
         }

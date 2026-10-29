@@ -1,23 +1,60 @@
-# Planned experiments
+# Experiments
 
-These JSON documents are experiment specifications, not executable scripts. The planned runner is described in [scripts/README.md](../scripts/README.md).
+This folder holds one correctness check and five performance experiments. Each experiment changes one factor and keeps the others fixed, so a difference in the results can be traced to that factor. The measurement protocol is in [docs/experiment_plan.md](../docs/experiment_plan.md).
 
-All experiment files use schema version 2 and inherit [defaults.json](../config/defaults.json). Each file declares its type through `kind`. Paths in `defaults` are relative to that experiment file; result paths are relative to the repository working directory.
+| # | Experiment | Question | What changes | What stays fixed | File |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Correctness | Does every parallel configuration give the serial answer? | ranks, threads, decomposition, exchange | small grids; nothing is timed | [correctness.json](correctness.json) |
+| 1 | Serial vs MPI (strong scaling over ranks) | How much faster do more ranks make the same problem? | ranks: 1, 2, 4, 8, 16 | $P$, one thread per rank, 2D, blocking | [strong_scaling_mpi.json](strong_scaling_mpi.json) |
+| 2 | Serial vs OpenMP (strong scaling over threads) | How much faster do more threads make the same problem? | threads: 1, 2, 4, 8, 16 | $P$, one rank | [strong_scaling_openmp.json](strong_scaling_openmp.json) |
+| 3 | Pure MPI vs MPI + OpenMP | With 16 cores, how should they be split between ranks and threads? | ranks × threads: 16×1, 8×2, 4×4, 2×8, 1×16 | $P$, 16 cores, 2D, blocking | [hybrid_layouts.json](hybrid_layouts.json) |
+| 4 | Communication strategy | Do the decomposition and the exchange mode matter? | rows or 2D; blocking or overlap | $P$, 16 ranks × 1 thread | [communication.json](communication.json) |
+| 5 | Weak scaling | Does the time stay the same when the work per rank stays the same? | ranks: 1, 4, 16 (the domain grows) | 512 × 512 cells and 4 threads per rank | [weak_scaling.json](weak_scaling.json) |
 
-| File | Kind | Planned use |
-| --- | --- | --- |
-| [correctness.json](correctness.json) | `correctness` | Explicit small runs, each compared with its own matching serial reference. |
-| [strong_scaling.json](strong_scaling.json) | `strong_scaling` | Fixed global problem and increasing ranks at one thread per rank. |
-| [weak_scaling.json](weak_scaling.json) | `weak_scaling` | Fixed interior cells per rank and fixed threads per rank; explicit 2D process grids. |
-| [strategies.json](strategies.json) | `strategies` | Fixed total CPU cores while comparing rank/thread allocation and strategies. |
+$P$ is the fixed problem of [benchmark_problem.json](benchmark_problem.json): 512 × 1024 cells and 100 steps, with the flow starting at rest. Its size is provisional; see below.
+
+## Correctness and performance
+
+Experiment 0 asks whether the answer is right. Experiments 1 to 5 ask how fast.
+
+- **Correctness** runs twelve small cases (at most 40 × 32 cells), each once, and compares the final field cell by cell with the serial result, within $10^{-10}$. Nothing is timed. The cases cover MPI only, OpenMP only and MPI + OpenMP, rows and 2D blocks, blocking and overlapping exchange, uneven splits and tiny blocks, because errors hide in odd cases. `scripts/check_correctness.py` labels each run with its layout.
+- **The performance experiments** use the large problem $P$, run each configuration six times (one warm-up, five measured) and report times, speedups and efficiencies. They never compare fields.
+
+They turn the same knobs, which is why they look alike, but one cannot replace the other: a wrong parallel code can still show a good speedup. So correctness runs first, with the same build on the same machine, and the timings are only believed if it passes.
+
+## How the experiments fit together
+
+- **Strong scaling is experiments 1 and 2.** Both hold $P$ fixed and add resources: first ranks (the serial vs MPI comparison, one thread per rank), then threads (the serial vs OpenMP comparison, one rank). Serial vs MPI is not a separate sweep from strong scaling; it is strong scaling over ranks.
+- **Experiments 3 and 4 were one file.** `strategies.json` crossed three factors (layout, decomposition and exchange: 20 configurations). Now experiment 3 changes only the layout and experiment 4 changes only the decomposition and the exchange. Interactions between the factors are not measured; if experiment 3 or 4 shows an effect that may depend on the other factor, add a file that crosses them.
+- **The baseline is 2D decomposition with blocking exchange** in experiments 1, 2, 3 and 5. Experiment 4 shows whether another choice is better.
+- **Experiment 5 is the only one in which the problem grows.**
+- **Experiment 4 has a limit.** `--exchange` changes only the exchange of the pigment, once per step; the Poisson solve, which takes about 99% of the run time, always blocks. Expect no visible difference between blocking and overlap until the conjugate gradient iteration overlaps its own exchange (see the plan).
+
+## Order and repeated runs
+
+Run experiment 0 first, then 1 and 2 (they give the serial reference and the one-core baselines), then 3, 4 and 5.
+
+Some configurations appear in more than one file: the serial run and the 1-rank, 1-thread run (experiments 1 and 2), 16 ranks × 1 thread with 2D and blocking (1, 3 and 4), and 1 rank × 16 threads (2 and 3). Of the 21 configurations listed in experiments 1 to 4, 16 are distinct. Each file stays runnable on its own, so a repeated configuration is measured again; if cluster time is short, run the files in one session and use the same rows for the repeats.
+
+## The shared problem
+
+[benchmark_problem.json](benchmark_problem.json) holds $P$ once. Experiments 1 to 4 inherit it, so they solve the identical problem and one serial reference serves all four; experiment 5 inherits its flow and pigment settings and replaces the grid. The values are written out in full, so that a change of `config/defaults.json` cannot change a benchmark.
+
+The grid and the number of steps are provisional. They are chosen so that a serial run takes a few minutes on a laptop (the first step took 1.7 s). Time one run on Atlas or Vanda, then adjust `nx`, `ny` and `steps` in this one file.
+
+## File format
+
+- Every file has `schema_version` 5, the same number as [config/defaults.json](../config/defaults.json). Every experiment file also has a `kind`, which says how it expands into runs.
+- `defaults` names the file to inherit, relative to the file that names it. The experiments inherit `benchmark_problem.json`, which inherits `config/defaults.json`; the chain is resolved from the inside out (`resolve_base` in [scripts/heat2d_tools.py](../scripts/heat2d_tools.py)). Result paths are relative to the repository working directory.
+- Each experiment writes its raw measurements to `results/raw/<file name>.csv` and its other files to `outputs/<file name>/`.
 
 ## Run expansion
 
-- For correctness, expand only the explicit `runs` list. Merge `problem` and `execution` overrides recursively into the defaults. Generate a serial reference with the same resolved problem for each run.
-- For strong scaling, run each `resources` entry with the shared `problem`, `decomposition` and `exchange` settings. Measure the pure serial executable separately for speedup.
+- For correctness (`correctness`), expand only the explicit `runs` list. Merge `problem` and `execution` overrides recursively into the defaults. Generate a serial reference with the same resolved problem for each run.
+- For strong scaling (`strong_scaling`), run each `resources` entry with the shared `decomposition` and `exchange`. With `include_serial_reference`, also run the pure serial executable on the same problem, as the reference for the speedup.
+- For the fixed-core comparisons (`strategies`), explicitly take the Cartesian product of `resources`, `decompositions` and `exchanges`. Every resource entry must use `total_cores` cores. Experiment 3 has one decomposition and one exchange, so the product is its five layouts; experiment 4 has one layout, so the product is its four variants.
+- For weak scaling (`weak_scaling`), use each explicit `resources` entry. With `[py, px]`, derive `nx = local_nx*px` and `ny = local_ny*py`. Use fixed `dx` and `dy` from `spacing`, then derive `lx = nx*dx` and `ly = ny*dy` (cell-centred grid). Each resource entry centres the blob in the grown domain. The flow settings and the speed estimate are fixed, so `dt` is the same for every run.
 - For all performance experiments, resource entries override the corresponding fields in `execution`; a `problem` object inside a resource entry overrides the corresponding problem fields, and the shared `execution.backend` selects the parallel executable. The pure serial reference is a separately generated configuration with one rank and one thread.
-- For strategies, explicitly take the Cartesian product of `resources`, `decompositions` and `exchanges`.
-- For weak scaling, use each explicit `resources` entry. With `[py, px]`, derive `nx = local_nx*px` and `ny = local_ny*py`. Use fixed `dx` and `dy` from `spacing`, then derive `lx = nx*dx` and `ly = ny*dy` (cell-centred grid). Each resource entry centres the blob in the grown domain. The flow settings and the speed estimate are fixed, so `dt` is the same for every run.
 
 Weak scaling intentionally grows the physical domain. With fixed spacing, fixed $\kappa$ and fixed speed bounds, the automatic `dt` and physical duration stay fixed while preserving the per-rank grid shape. It is a throughput experiment, not a comparison of the same physical domain at several resolutions.
 

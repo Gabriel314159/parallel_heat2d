@@ -1,0 +1,21 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 2: serial vs OpenMP (strong scaling over threads). The fixed problem P on one MPI rank with 1, 2, 4, 8 and 16 threads, compared with the pure serial program. The 1-thread run is the same configuration as the 1-rank run of experiment 1.",
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 1},
+    {"mpi_ranks": 1, "omp_threads": 2},
+    {"mpi_ranks": 1, "omp_threads": 4},
+    {"mpi_ranks": 1, "omp_threads": 8},
+    {"mpi_ranks": 1, "omp_threads": 16}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/strong_scaling_openmp", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/strong_scaling_openmp.csv"
+}

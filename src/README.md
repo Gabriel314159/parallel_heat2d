@@ -88,14 +88,14 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 
 | File | Responsibility |
 | --- | --- |
-| `main.cpp` | MPI initialization, rank-aware errors, parameter handling, solver invocation and finalization. |
-| `solver.hpp`, `solver.cpp` | Spin-up and time loop, physical-wall ghost fill, the flow step, OpenMP worksharing, strategy selection, the speed check, timing and the global sums. |
-| `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology and physical-edge ownership. |
+| `main.cpp` | MPI initialization (`MPI_THREAD_FUNNELED`, `MPI_ERRORS_RETURN`), parameter handling, solver invocation and finalization. Any exception prints the rank and ends in `MPI_Abort`. |
+| `solver.hpp`, `solver.cpp` | The thread count (`configure_threads`), spin-up and time loop, physical-wall ghost fill, the flow step, OpenMP worksharing, strategy selection, the speed check, timing and the global sums. |
+| `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology (Cartesian communicator without reordering) and physical-edge ownership; the node count; `mpi_check`, which turns an MPI error code into an exception. |
 | `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange of the pigment, and the blocking exchange with corners for $\psi$ and $\zeta$. |
 
 ### Implementation
 
-1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI.
+1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI. Set `MPI_ERRORS_RETURN` on the world and the Cartesian communicator and wrap every MPI call in `mpi_check`; `main` turns any exception into a message with the rank and `MPI_Abort`. Choose the threads per rank (`--threads`, else `OMP_NUM_THREADS`, else 1), check that all ranks agree, and count the nodes (`MPI_Comm_split_type` with `MPI_COMM_TYPE_SHARED`).
 2. Split global rows across ranks, including any remainder. Then extend the same interface to a 2D Cartesian process grid. The decomposition is unchanged by the advection–diffusion model.
 3. Store local fields with a halo of width `halo` on all sides, plus the local face-velocity arrays.
 4. Every step, fill each side of the local block in one of two ways:
@@ -117,7 +117,7 @@ At one or two cells per local dimension, the overlap interior may be empty. Use 
 
 Rows are contiguous: they are sent straight from the field with an MPI vector datatype (`halo` rows of `nx` interior values). Columns are packed into contiguous buffers before sending and unpacked after receiving. Blocking and overlapping exchange use the same scheme, so comparing them changes only the timing of the messages. For the pigment, only interior values are sent and only edge ghost cells are written. For $\psi$ and $\zeta$, the corner exchange first sends the columns and then whole rows including their ghost columns, which carries the diagonal neighbours' values into the corner ghosts.
 
-For each MPI communicator used, determine neighbors and gather metadata with its own rank numbering, especially if Cartesian rank reordering is enabled.
+The Cartesian communicator is created with `reorder = 0`, so its ranks are the world ranks and the launcher's placement of ranks on cores is kept. Still use the Cartesian communicator for everything after the layout is made (neighbors, gathers, reductions), and determine neighbors and gather metadata with its own rank numbering.
 
 ### Diagnostics and timing
 
