@@ -350,9 +350,11 @@ $$
 
 Each iteration needs one halo exchange (for $A p_k$, which reads the four nearest neighbours) and two global sums (the dot products $p_k\cdot Ap_k$ and $r_{k+1}\cdot r_{k+1}$). The solver itself contains no MPI: the global sum and the halo exchange are passed in, so that the serial and parallel solvers share one implementation.
 
+With `--exchange overlap`, the halo exchange of $p_k$ overlaps with the work on $Ap_k$ (see "Halo exchange"). The global sums cannot overlap: $\alpha_k$ needs $p_k\cdot Ap_k$ before $\psi$ and $r$ can be updated, and the stopping test and $\beta_k$ need $r_{k+1}\cdot r_{k+1}$ before the next iteration can start.
+
 The cost is the price of this simplicity. The number of iterations grows with the grid: a step of the default flow needs about 180 iterations on $128 \times 256$ cells and about 350 on $256 \times 512$, and the Poisson solve takes over 99% of the run time. A preconditioner, such as multigrid, would reduce the iterations and is left for later.
 
-The global sums add the rank contributions in a different order in parallel, so the serial and parallel solutions differ at the level of rounding and of the tolerance, not bit for bit.
+The global sums add the rank contributions in a different order in parallel, so the serial and parallel solutions differ at the level of rounding and of the tolerance, not bit for bit. Overlap changes the order once more, because $p_k\cdot Ap_k$ is summed over the inner corners first. Blocking and overlapping runs therefore also differ at the level of rounding, and a solve may take one iteration more or fewer.
 
 Finally, the face velocities are computed from $\psi^{n+1}$ with the formulas in "Velocity on faces".
 
@@ -549,13 +551,23 @@ For overlap:
 
 Do not modify send buffers, read incomplete receive buffers or reuse communication resources before the matching requests complete. Small local blocks may have no strict interior; handle them without duplicate edge updates.
 
-Nonblocking calls do not guarantee a performance improvement. MPI progress, message size and available independent work determine whether overlap helps.
+The CG iteration overlaps the exchange of $p_k$ in the same way, with $Ap_k$ in place of the pigment update:
+
+1. Start the exchange of $p_k$.
+2. Compute $Ap_k$ and its share of $p_k\cdot Ap_k$ at the inner corners: those one corner away from every block edge shared with another rank, whose stencil reads no process halo.
+3. Complete the exchange.
+4. Compute the remaining unknown corners (the edge strips), each exactly once.
+5. Add up $p_k\cdot Ap_k$ over all ranks.
+
+Corners next to a wall can be inner, because the wall corners are stored zeros. A block with no inner corners does all its corners in step 4.
+
+Nonblocking calls do not guarantee a performance improvement. MPI progress, message size and available independent work determine whether overlap helps. Within one node, the MPI library usually copies a message through shared memory inside the MPI calls themselves, so there is little waiting to hide; between nodes, the network delay is what overlap can hide.
 
 ### Corner fields
 
 The Arakawa Jacobian reads diagonal neighbours, so $\psi$ and $\zeta$ also need their corner ghost cells. We get them by exchanging in two phases: first the columns, then the rows including their ghost columns. The row message then carries the values that the sender has just received from its east and west neighbours, which are the receiver's diagonal neighbours.
 
-The two phases must run in order, so this exchange is blocking. The pigment update and the CG iterations only read the four nearest neighbours and use the ordinary exchange; for the pigment it can be blocking or overlapping.
+The two phases must run in order, so this exchange is blocking. The pigment update and the CG iterations only read the four nearest neighbours and use the ordinary exchange; for both it can be blocking or overlapping (`--exchange`).
 
 ## OpenMP and MPI thread support
 
@@ -581,6 +593,12 @@ We set `MPI_ERRORS_RETURN` on `MPI_COMM_WORLD` and on the Cartesian communicator
 
 The same number of ranks performs differently on one node and on several. We count the nodes of a run as the number of groups of ranks that can share memory (`MPI_Comm_split_type` with `MPI_COMM_TYPE_SHARED`), and record this number together with the ranks and the threads.
 
+### Binding check
+
+The launcher decides on which cores a rank may run. If a rank may use fewer cores than it has threads, the threads share cores, and the timings no longer measure one thread per core. This happens with the default settings of some launchers: Open MPI binds each rank to a single core when it starts two ranks or fewer, and Slurm's `srun` allocates one CPU per rank unless told otherwise (`--cpus-per-task`), to which many clusters confine the rank.
+
+So each rank counts the physical cores its threads may run on. It asks every OpenMP thread for its affinity mask, takes their union, and counts the hardware threads of one core once (from the CPU topology that Linux reports). We record the smallest count over the ranks, and warn when it is below the number of threads per rank. The run goes on, so that the run report shows what happened. Where the system does not report the masks (macOS), the count is 0, for unknown.
+
 ## Diagnostics
 
 Total scalar over interior cells:
@@ -599,13 +617,20 @@ E = \frac12\,\Delta x\,\Delta y\sum_{\text{corners}} \psi\,\zeta,
 Z = \frac12\,\Delta x\,\Delta y\sum_{\text{corners}} \zeta^2 .
 $$
 
-$E$ is the kinetic energy $\frac12\int \lvert\mathbf{u}\rvert^2$, because $\zeta = -\nabla^2\psi$ and $\psi = 0$ on the walls, so integrating by parts gives $\int \psi\zeta = \int \lvert\nabla\psi\rvert^2$. Both sums need a global sum in parallel. We also record the time spent in the Poisson solve and the number of CG iterations per step.
+$E$ is the kinetic energy $\frac12\int \lvert\mathbf{u}\rvert^2$, because $\zeta = -\nabla^2\psi$ and $\psi = 0$ on the walls, so integrating by parts gives $\int \psi\zeta = \int \lvert\nabla\psi\rvert^2$. Both sums need a global sum in parallel. We also record the time spent in the Poisson solves of the timed loop and their number of CG iterations per step; the solves of the spin-up are part of the spin-up time.
 
 ## Output and metrics
 
 Small validation runs may gather the global matrix. Gathering and file writing happen outside solver-loop timing. Global output contains the $n_y \times n_x$ interior cells once, never ghost cells or duplicate process halos. Record the parameters ($\kappa$, $\nu$ and the wind parameters), the mass error and the number of ranks, threads per rank and nodes actually used in the run metadata.
 
 Time the whole loop, including necessary communication, wall-ghost filling and any per-step velocity evaluation. Synchronize before the timed MPI region and report the maximum elapsed time over ranks. Keep initialization, validation and output timings separate. Phase timings under overlap are diagnostic and must not be blindly added together.
+
+The parallel solver records two such phase times of the Poisson solves, each the largest over the ranks:
+
+- the time inside the CG's halo exchanges: the whole exchange when blocking; when overlapping, only posting the messages and waiting for them, which is the part the computation did not hide;
+- the time inside the CG's global sums, which includes waiting for the slowest rank.
+
+They show where the time of the solve goes as ranks are added.
 
 Snapshots also store $\psi$ and $\zeta$, so that the plots can draw the streamlines and the vorticity of the flow.
 

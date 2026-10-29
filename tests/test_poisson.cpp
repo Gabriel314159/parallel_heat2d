@@ -10,6 +10,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "common/corners.hpp"
 #include "common/grid.hpp"
@@ -43,6 +44,12 @@ Block whole(int nx, int ny) {
     b.ny = ny;
     return b;
 }
+
+// One process that takes the overlapping path; there are no process halos.
+class SerialOverlapComm : public SerialComm {
+public:
+    bool overlap() const override { return true; }
+};
 
 // The five-point operator -(lap psi) at an unknown corner.
 double minus_laplacian(const Field& psi, int i, int j, double dx, double dy) {
@@ -166,6 +173,84 @@ int main() {
             stopped = std::string(e.what()).find("did not reach") != std::string::npos;
         }
         check(stopped, "a solve that cannot reach the tolerance stops with a message");
+    }
+
+    std::cout << "Overlap split\n";
+    {
+        // Every block size up to 6 x 6, every choice of walls (a side that is
+        // not a wall has a neighbouring rank).
+        bool exact_cover = true;
+        bool inner_reads_no_halo = true;
+        for (int walls = 0; walls < 16; ++walls) {
+            for (int ny = 1; ny <= 6; ++ny) {
+                for (int nx = 1; nx <= 6; ++nx) {
+                    Block b = whole(nx, ny);
+                    b.wall_top = (walls & 1) != 0;
+                    b.wall_bottom = (walls & 2) != 0;
+                    b.wall_left = (walls & 4) != 0;
+                    b.wall_right = (walls & 8) != 0;
+                    const CornerRange u = unknown_corners(b);
+                    const OverlapSplit split = overlap_split(b);
+
+                    // How often each stored corner (ghosts included) is computed.
+                    std::vector<int> count(static_cast<std::size_t>((ny + 2) * (nx + 2)), 0);
+                    auto mark = [&](const CornerRange& r) {
+                        for (int i = r.i_first; i <= r.i_last; ++i) {
+                            for (int j = r.j_first; j <= r.j_last; ++j) {
+                                if (i < 0 || i > ny + 1 || j < 0 || j > nx + 1) {
+                                    exact_cover = false;
+                                } else {
+                                    ++count[static_cast<std::size_t>(i * (nx + 2) + j)];
+                                }
+                            }
+                        }
+                    };
+                    mark(split.inner);
+                    for (const CornerRange& edge : split.edges) mark(edge);
+                    for (int i = 0; i <= ny + 1; ++i) {
+                        for (int j = 0; j <= nx + 1; ++j) {
+                            const bool unknown = i >= u.i_first && i <= u.i_last && j >= u.j_first && j <= u.j_last;
+                            if (count[static_cast<std::size_t>(i * (nx + 2) + j)] != (unknown ? 1 : 0)) {
+                                exact_cover = false;
+                            }
+                        }
+                    }
+
+                    // A at (i, j) reads rows i-1, i+1 and columns j-1, j+1; the
+                    // process halos are row 0, row ny+1, column 0 and column nx+1
+                    // on the sides that are not walls.
+                    const CornerRange in = split.inner;
+                    for (int i = in.i_first; i <= in.i_last; ++i) {
+                        for (int j = in.j_first; j <= in.j_last; ++j) {
+                            if ((!b.wall_top && i - 1 < 1) || (!b.wall_bottom && i + 1 > ny) ||
+                                (!b.wall_left && j - 1 < 1) || (!b.wall_right && j + 1 > nx)) {
+                                inner_reads_no_halo = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        check(exact_cover, "inner and edge corners cover every unknown corner exactly once (blocks up to 6 x 6, all walls)");
+        check(inner_reads_no_halo, "no inner corner reads a process halo");
+
+        // Without process halos every unknown corner is inner, so the
+        // overlapping path must give exactly the blocking result.
+        Field zeta(64, 32), psi_blocking(64, 32), psi_overlap(64, 32);
+        std::uint64_t state = 11;
+        for (int i = 1; i < 64; ++i) {
+            for (int j = 1; j < 32; ++j) zeta(i, j) = next_random(state);
+        }
+        PoissonCG blocking(whole(32, 64), 1.0 / 32, 2.0 / 64, 1e-10, 10000);
+        PoissonCG overlap(whole(32, 64), 1.0 / 32, 2.0 / 64, 1e-10, 10000);
+        const CgStats a = blocking.solve(zeta, psi_blocking, SerialComm());
+        const CgStats b = overlap.solve(zeta, psi_overlap, SerialOverlapComm());
+        bool same = a.iterations == b.iterations;
+        for (int i = 1; i < 64; ++i) {
+            for (int j = 1; j < 32; ++j) same = same && psi_blocking(i, j) == psi_overlap(i, j);
+        }
+        check(same, "on one process, the overlapping path gives exactly the blocking result (" +
+                        std::to_string(b.iterations) + " iterations)");
     }
 
     std::cout << "\n" << (failures == 0 ? "PASS" : "FAIL") << "\n";

@@ -85,10 +85,10 @@ The discrete steady state (two Poisson solves) must converge to it at second ord
 - Keep allocation, initial setup, field gathering, output, plotting and checking outside the loop timer.
 - Put an MPI barrier immediately before timing, then reduce rank-local elapsed times with `MPI_MAX` after the timed loop.
 - Perform one warmup and five measured repetitions initially. Preserve every repetition and report a median plus variation.
-- Record actual MPI ranks, OpenMP threads, node count, binding, libraries, hardware and Git commit. The solvers report the ranks, threads and nodes they used; the binding comes from the launcher and must be recorded separately.
+- Record actual MPI ranks, OpenMP threads, node count, binding, libraries, hardware and Git commit. The solvers report the ranks, threads and nodes they used, and the fewest physical cores any rank may run on (`cores_per_rank`); `heat_parallel` warns when that is below the threads per rank. Record the launcher's binding options as well.
 - Allocate enough CPUs and memory for the largest layout. Avoid oversubscription and unrelated concurrent runs.
 
-Optional phase timers should clearly distinguish wait time from complete communication time. Under overlap, diagnostic phase times are not additive estimates of total runtime.
+The parallel solver reports two phase times of the Poisson solves: `poisson_halo_s`, the time inside the CG's halo exchanges (under overlap only posting and waiting, the part not hidden), and `poisson_sum_s`, the time inside its global sums, including the wait for the slowest rank. Each is the largest over the ranks, so they are diagnostic and not additive estimates of the total runtime.
 
 ## Performance experiments
 
@@ -106,11 +106,11 @@ The denominator counts physical CPU cores when one thread is bound to each physi
 
 ### 1. Serial vs MPI (strong scaling over ranks)
 
-Hold $P$ fixed and increase the number of ranks, with one thread per rank. Report the runtime, $S(p)$ and $E(p)$ against the pure serial program. The one-rank run shows what the MPI setup and the halo code cost on their own, when compared with the serial run.
+Hold $P$ fixed and increase the number of ranks, with one thread per rank. Report the runtime, $S(p)$ and $E(p)$ against the pure serial program. The one-rank run shows what the MPI setup and the halo code cost on their own, when compared with the serial run. Report `poisson_halo_s` and `poisson_sum_s` next to the runtime: they show how much of the Poisson time goes to communication as ranks are added, and so where the speedup stops growing.
 
 ### 2. Serial vs OpenMP (strong scaling over threads)
 
-Hold $P$ fixed on one rank and increase the number of threads. Report the same quantities. The conjugate gradient loops read and write large arrays with little arithmetic per value, so memory bandwidth may limit the speedup. Bind each thread to a core and record the binding.
+Hold $P$ fixed on one rank and increase the number of threads. Report the same quantities. The conjugate gradient loops read and write large arrays with little arithmetic per value, so memory bandwidth may limit the speedup. Bind each thread to a core, record the binding, and check that `cores_per_rank` is at least the number of threads: a launcher that binds the single rank to one core would otherwise run all threads there.
 
 ### 3. Pure MPI vs MPI + OpenMP
 
@@ -120,7 +120,9 @@ Fix the number of cores at 16 and change how they are split between ranks and th
 
 At 16 ranks with one thread each, compare row and 2D decomposition, and blocking and overlapping exchange, in four runs. Rows give each rank two neighbours and long messages; 2D blocks give up to four neighbours and shorter messages, and the columns are packed before sending.
 
-What this experiment can show is limited. `--exchange` changes only the halo exchange of the pigment, which happens once per step. The Poisson solve exchanges halos once per conjugate gradient iteration, hundreds of times per step, and always blocks. It takes about 99% of the run time (informal laptop measurement, 4 ranks, 256 × 512 cells: 99.2%), and the blocking and overlapping runs differed by less than the run-to-run noise. Expect no visible difference between blocking and overlap until the Poisson solve overlaps its own exchange. The decomposition, in contrast, changes the messages of every iteration. Report what is measured, and do not claim that overlap is faster before measuring it.
+`--exchange` applies to both halo exchanges: the pigment's, once per step, and the conjugate gradient's, once per iteration, hundreds of times per step (`docs/design.md`, "Halo exchange"). The Poisson solve takes about 99% of the run time, so the CG exchange is the one that matters. The first version overlapped only the pigment exchange, and blocking and overlapping runs then differed by less than the run-to-run noise (informal laptop measurement, 4 ranks, 256 × 512 cells).
+
+The two global sums of every CG iteration always wait, so overlap can save at most the CG halo time of the blocking runs (`poisson_halo_s`). Compare that with the difference in runtime. Within one node the messages are copies through shared memory, and the gain may be small: an informal laptop test with the CG overlap (4 ranks, 256 × 512 cells) showed halo exchanges taking 6–11% of the Poisson time and no difference beyond the noise. The decomposition changes the messages of every iteration. Report what is measured, and do not claim that overlap is faster before measuring it. A run of this experiment across two nodes would show whether overlap hides network delay.
 
 ### 5. Weak scaling
 
@@ -139,6 +141,7 @@ The reference here is one MPI rank with four threads, not the single-threaded se
 - Relative mass change for the validation cases.
 - Analytical error versus resolution for the cosine case.
 - Runtime, speedup and efficiency versus ranks (experiment 1) and versus threads (experiment 2).
+- Time inside the CG's halo exchanges and global sums versus ranks (experiment 1).
 - Runtime of each rank/thread layout at 16 cores (experiment 3) and of the four decomposition and exchange variants (experiment 4).
 - Weak-scaling efficiency and time per CG iteration versus ranks (experiment 5).
 

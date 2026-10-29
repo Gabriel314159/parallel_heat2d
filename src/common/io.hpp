@@ -33,6 +33,7 @@ struct RunSummary {
     int mpi_ranks = 1;
     int omp_threads = 1;      // threads per rank actually in use
     int nodes = 1;            // nodes the ranks run on
+    int cores_per_rank = 0;   // physical cores a rank's threads may run on, fewest over ranks; 0 if unknown
     int py = 1;
     int px = 1;
     std::string decomposition = "none";
@@ -43,10 +44,16 @@ struct RunSummary {
     double t_end = 0.0;       // flow time at the end of the run
     double elapsed_s = 0.0;   // main time-stepping loop; snapshots excluded; max over ranks
     double spinup_s = 0.0;    // spin-up loop; max over ranks
-    double poisson_s = 0.0;   // part of spin-up and main loop spent in the Poisson solve
-    long poisson_iterations = 0;     // CG iterations over all flow steps
+    // The Poisson solves of the main loop (the spin-up's are part of
+    // spinup_s), and the parts of them spent inside the CG's halo exchanges
+    // (when overlapping, only posting and waiting) and global sums; each the
+    // max over ranks. Diagnostic: the parts are not additive.
+    double poisson_s = 0.0;
+    double poisson_halo_s = 0.0;
+    double poisson_sum_s = 0.0;
+    long poisson_iterations = 0;     // CG iterations over the main loop
     int poisson_iterations_max = 0;  // the most in one solve
-    long flow_steps = 0;             // flow steps (spin-up and main loop)
+    long poisson_solves = 0;         // solves in the main loop, one per step
     double snapshot_s = 0.0;  // time spent gathering and writing snapshots
     double mass_initial = 0.0;
     double mass_final = 0.0;

@@ -7,7 +7,8 @@
 // never stored: applying it is the stencil above.
 //
 // The solver contains no MPI. What it needs from outside, a global sum and a
-// halo exchange, is passed in as a PoissonComm, so the serial and the parallel
+// halo exchange (blocking, or started and finished around the work that reads
+// no halo), is passed in as a PoissonComm, so the serial and the parallel
 // solver share this one implementation. It is header-only, so the parallel
 // solver compiles its loops with OpenMP (HEAT2D_USE_OPENMP) and the serial
 // solver without.
@@ -30,6 +31,13 @@ public:
     // Fill the process halos of a corner field (only the four nearest
     // neighbours are read by A).
     virtual void exchange(Field& f) const = 0;
+    // Overlap (--exchange overlap): start() begins filling the process halos
+    // and returns at once, finish() waits until they are filled. In between,
+    // the solver applies A where no process halo is read, and neither changes
+    // the field nor reads its process halos. By default there is no overlap.
+    virtual bool overlap() const { return false; }
+    virtual void start(Field& f) const { exchange(f); }
+    virtual void finish(Field&) const {}
 };
 
 // One process: local sums are global sums, and there are no process halos.
@@ -44,11 +52,35 @@ struct CgStats {
     double relative_residual = 0.0;  // ||r|| / ||zeta|| at the end
 };
 
+// The unknown corners of a block, split for overlap. A reads one corner in
+// each direction, so the `inner` corners, one corner away from every block
+// edge shared with another rank (every side that is not a wall), read no
+// process halo. The `edges` are the rest, each corner exactly once; some of
+// them may be empty. A block too small to have inner corners has all its
+// unknown corners in edges[0].
+struct OverlapSplit {
+    CornerRange inner;
+    CornerRange edges[4];  // the top, bottom, left and right strips
+};
+
+inline OverlapSplit overlap_split(const Block& b) {
+    const CornerRange u = unknown_corners(b);
+    const CornerRange in{b.wall_top ? u.i_first : u.i_first + 1, b.wall_bottom ? u.i_last : u.i_last - 1,
+                         b.wall_left ? u.j_first : u.j_first + 1, b.wall_right ? u.j_last : u.j_last - 1};
+    const CornerRange none{1, 0, 1, 0};
+    if (in.empty()) return OverlapSplit{none, {u, none, none, none}};
+    return OverlapSplit{in,
+                        {CornerRange{u.i_first, in.i_first - 1, u.j_first, u.j_last},
+                         CornerRange{in.i_last + 1, u.i_last, u.j_first, u.j_last},
+                         CornerRange{in.i_first, in.i_last, u.j_first, in.j_first - 1},
+                         CornerRange{in.i_first, in.i_last, in.j_last + 1, u.j_last}}};
+}
+
 class PoissonCG {
 public:
     // tol: stop when ||r|| <= tol ||zeta||. max_iterations: give up (throw) after this many.
     PoissonCG(const Block& b, double dx, double dy, double tol, int max_iterations)
-        : unknown_(unknown_corners(b)), cx_(1 / (dx * dx)), cy_(1 / (dy * dy)),
+        : unknown_(unknown_corners(b)), split_(overlap_split(b)), cx_(1 / (dx * dx)), cy_(1 / (dy * dy)),
           diagonal_(2 / (dx * dx) + 2 / (dy * dy)), tol_(tol), max_iterations_(max_iterations),
           r_(b.ny, b.nx), p_(b.ny, b.nx), ap_(b.ny, b.nx) {}
 
@@ -95,22 +127,18 @@ public:
         if (rr <= target) return CgStats{0, std::sqrt(rr / bb)};
 
         for (int k = 1; k <= max_iterations_; ++k) {
-            comm.exchange(p_);
-
-            // Ap = A p and p . Ap
+            // Ap = A p and p . Ap. With overlap, A is applied to the inner
+            // corners while the halo messages of p travel, and to the edge
+            // corners once they have arrived.
             double pap = 0.0;
-#ifdef HEAT2D_USE_OPENMP
-#pragma omp parallel for reduction(+ : pap) schedule(static)
-#endif
-            for (int i = u.i_first; i <= u.i_last; ++i) {
-                const double* pn = p_.row(i - 1);
-                const double* p = p_.row(i);
-                const double* ps = p_.row(i + 1);
-                double* ap = ap_.row(i);
-                for (int j = u.j_first; j <= u.j_last; ++j) {
-                    ap[j] = apply(pn, p, ps, j);
-                    pap += p[j] * ap[j];
-                }
+            if (comm.overlap()) {
+                comm.start(p_);
+                pap = apply_a(split_.inner);
+                comm.finish(p_);
+                for (const CornerRange& edge : split_.edges) pap += apply_a(edge);
+            } else {
+                comm.exchange(p_);
+                pap = apply_a(u);
             }
             comm.sum(&pap, 1);
             const double alpha = rr / pap;
@@ -158,6 +186,26 @@ private:
         return diagonal_ * c[j] - cx_ * (c[j - 1] + c[j + 1]) - cy_ * (n[j] + s[j]);
     }
 
+    // Ap = A p on the corners of `range`; returns the sum of p * Ap over them.
+    double apply_a(const CornerRange& range) {
+        double pap = 0.0;
+        if (range.empty()) return pap;
+#ifdef HEAT2D_USE_OPENMP
+#pragma omp parallel for reduction(+ : pap) schedule(static)
+#endif
+        for (int i = range.i_first; i <= range.i_last; ++i) {
+            const double* pn = p_.row(i - 1);
+            const double* p = p_.row(i);
+            const double* ps = p_.row(i + 1);
+            double* ap = ap_.row(i);
+            for (int j = range.j_first; j <= range.j_last; ++j) {
+                ap[j] = apply(pn, p, ps, j);
+                pap += p[j] * ap[j];
+            }
+        }
+        return pap;
+    }
+
     void set_unknown(Field& f, double value) const {
         for (int i = unknown_.i_first; i <= unknown_.i_last; ++i) {
             for (int j = unknown_.j_first; j <= unknown_.j_last; ++j) f(i, j) = value;
@@ -165,6 +213,7 @@ private:
     }
 
     CornerRange unknown_;
+    OverlapSplit split_;
     double cx_;
     double cy_;
     double diagonal_;

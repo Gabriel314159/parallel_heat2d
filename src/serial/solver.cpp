@@ -8,6 +8,7 @@
 #include <optional>
 #include <utility>
 
+#include "common/affinity.hpp"
 #include "common/corners.hpp"
 #include "common/flow.hpp"
 #include "common/grid.hpp"
@@ -115,18 +116,9 @@ SerialResult run_serial(const Config& cfg) {
     };
 
     // Spin-up: the flow alone, from rest.
-    double poisson_seconds = 0.0;
-    long poisson_iterations = 0;
-    int poisson_iterations_max = 0;
-    auto flow_step = [&](long s) {
-        const PoissonWork work = flow.step(s, vel);
-        poisson_seconds += work.seconds;
-        poisson_iterations += work.iterations;
-        poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
-    };
     const Clock::time_point spinup_start = Clock::now();
     for (long s = 0; s < spinup; ++s) {
-        flow_step(s);
+        flow.step(s, vel);
         check(s + 1);
     }
     const double spinup_seconds = seconds_since(spinup_start);
@@ -152,6 +144,17 @@ SerialResult run_serial(const Config& cfg) {
         snapshots.emplace(cfg, dt, spinup * dt, "heat_serial");
         snapshots->write(snapshot(0));
     }
+
+    // The Poisson solves of the timed loop; the spin-up's are part of its time.
+    double poisson_seconds = 0.0;
+    long poisson_iterations = 0;
+    int poisson_iterations_max = 0;
+    auto flow_step = [&](long s) {
+        const PoissonWork work = flow.step(s, vel);
+        poisson_seconds += work.seconds;
+        poisson_iterations += work.iterations;
+        poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
+    };
 
     double snapshot_seconds = 0.0;
     const Clock::time_point start = Clock::now();
@@ -184,10 +187,11 @@ SerialResult run_serial(const Config& cfg) {
     s.t_end = (spinup + cfg.steps) * dt;
     s.elapsed_s = loop_seconds;
     s.spinup_s = spinup_seconds;
+    s.cores_per_rank = allowed_cores();
     s.poisson_s = poisson_seconds;
     s.poisson_iterations = poisson_iterations;
     s.poisson_iterations_max = poisson_iterations_max;
-    s.flow_steps = spinup + cfg.steps;
+    s.poisson_solves = cfg.steps;
     s.snapshot_s = snapshot_seconds;
     s.mass_initial = mass0;
     s.mass_final = local_mass(current, dx, dy);

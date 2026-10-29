@@ -19,7 +19,8 @@ Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src`
 | `grid.hpp` | `Field`: a contiguous `std::vector<double>`, local dimensions, a halo of width `halo` on every side, `(i, j)` access and row pointers for the loops. `FaceVelocities`: the two face-velocity arrays. `Block`: where a local block sits in the global grid and which of its sides are walls. |
 | `corners.hpp` | Corner fields ($\psi$, $\zeta$) stored in a `Field`: corner positions, the range of unknown corners of a block, and zeroing the ghost corners on the top and left walls. |
 | `flow.hpp`, `flow.cpp` | One row of the vorticity right-hand side $R = J(\psi,\zeta) + F + \nu\nabla^2\zeta$ (Arakawa Jacobian), the Adams–Bashforth weights and update, the wind profile and strength, the face velocities from $\psi$, and the energy and enstrophy sums. |
-| `poisson.hpp` | The conjugate gradient Poisson solver, matrix-free and warm-started. Header-only, so the parallel solver compiles its loops with OpenMP; the global sum and the halo exchange come in through a small `PoissonComm` interface (`SerialComm` for one process). |
+| `poisson.hpp` | The conjugate gradient Poisson solver, matrix-free and warm-started. Header-only, so the parallel solver compiles its loops with OpenMP; the global sum and the halo exchange come in through a small `PoissonComm` interface (`SerialComm` for one process). With overlap, $Ap$ is computed on the inner corners while the exchange runs, and on the edge strips after it (`overlap_split`). |
+| `affinity.hpp` | The physical cores a process's threads may run on (the union of the OpenMP threads' affinity masks; Linux only, 0 elsewhere), for the binding check. Header-only, like `poisson.hpp`. |
 | `velocity.hpp`, `velocity.cpp` | An analytic streamfunction (the former prescribed double gyre) and its per-face velocities, kept as a reference for the face-velocity tests. |
 | `physics.hpp`, `physics.cpp` | Initial conditions (`pigment_drop` Gaussian, `constant`, `cosine_decay`), the no-flux wall ghost fill, the analytic `cosine_decay` reference (continuous and exact-discrete), and the local mass sum $\Delta x\,\Delta y\sum c_{i,j}$. |
 | `stencil.hpp` | An inline upwind flux update of one pigment cell from its five cell values and its four face velocities; no communication or threading inside this function. |
@@ -80,7 +81,7 @@ During spin-up each step is a flow step only. After the release, each time step 
 
 The solver must not depend on MPI or OpenMP. Use the same problem, time step, number of steps and precision as the parallel versions.
 
-Timing covers the whole time-stepping loop, including the ghost fill and the flow step; the spin-up and the snapshot writing are measured separately, and the time spent in the Poisson solve is reported as well. Allocation, initialization, file output and validation are separate phases. The total mass $M$ is computed before and after the loop, outside the timed region; with no-flux walls its relative change (`mass_error`, see `docs/experiment_plan.md`) stays at rounding level, about $10^{-13}$ after tens of thousands of steps. Do not infer correctness from a heatmap alone.
+Timing covers the whole time-stepping loop, including the ghost fill and the flow step; the spin-up and the snapshot writing are measured separately, and the time spent in the Poisson solves of the loop is reported as well. Allocation, initialization, file output and validation are separate phases. The total mass $M$ is computed before and after the loop, outside the timed region; with no-flux walls its relative change (`mass_error`, see `docs/experiment_plan.md`) stays at rounding level, about $10^{-13}$ after tens of thousands of steps. Do not infer correctness from a heatmap alone.
 
 ## Parallel solver (`parallel/`)
 
@@ -91,11 +92,12 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 | `main.cpp` | MPI initialization (`MPI_THREAD_FUNNELED`, `MPI_ERRORS_RETURN`), parameter handling, solver invocation and finalization. Any exception prints the rank and ends in `MPI_Abort`. |
 | `solver.hpp`, `solver.cpp` | The thread count (`configure_threads`), spin-up and time loop, physical-wall ghost fill, the flow step, OpenMP worksharing, strategy selection, the speed check, timing and the global sums. |
 | `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology (Cartesian communicator without reordering) and physical-edge ownership; the node count; `mpi_check`, which turns an MPI error code into an exception. |
-| `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange of the pigment, and the blocking exchange with corners for $\psi$ and $\zeta$. |
+| `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange (the pigment and the CG's search direction), and the blocking exchange with corners for $\psi$ and $\zeta$. |
+| `poisson_comm.hpp` | `MpiComm`: the global sums (`MPI_Allreduce`) and halo exchanges of the CG solver, blocking or overlapping, and the time spent inside them. |
 
 ### Implementation
 
-1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI. Set `MPI_ERRORS_RETURN` on the world and the Cartesian communicator and wrap every MPI call in `mpi_check`; `main` turns any exception into a message with the rank and `MPI_Abort`. Choose the threads per rank (`--threads`, else `OMP_NUM_THREADS`, else 1), check that all ranks agree, and count the nodes (`MPI_Comm_split_type` with `MPI_COMM_TYPE_SHARED`).
+1. Request `MPI_THREAD_FUNNELED` and verify the returned support level. Only the initializing thread calls MPI. Set `MPI_ERRORS_RETURN` on the world and the Cartesian communicator and wrap every MPI call in `mpi_check`; `main` turns any exception into a message with the rank and `MPI_Abort`. Choose the threads per rank (`--threads`, else `OMP_NUM_THREADS`, else 1), check that all ranks agree, count the nodes (`MPI_Comm_split_type` with `MPI_COMM_TYPE_SHARED`), and count the cores each rank may run on (`allowed_cores`, the fewest over ranks), with a warning when that is below the threads per rank.
 2. Split global rows across ranks, including any remainder. Then extend the same interface to a 2D Cartesian process grid. The decomposition is unchanged by the advection–diffusion model.
 3. Store local fields with a halo of width `halo` on all sides, plus the local face-velocity arrays.
 4. Every step, fill each side of the local block in one of two ways:
@@ -104,7 +106,7 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 5. Implement blocking halo exchange using a deadlock-safe communication pattern such as `MPI_Sendrecv`.
 6. After the pigment update, advance the flow: exchange $\zeta$ with corners, compute the right-hand side and the Adams–Bashforth update on the local unknown corners, solve the Poisson equation with CG (one halo exchange and two `MPI_Allreduce` sums per iteration), exchange $\psi$ with corners, and compute the local face velocities. Both ranks next to a shared face compute it from the same $\psi$ values, so they agree exactly.
 7. Parallelize the pigment update, the vorticity rows, the face velocities and the CG loops with OpenMP, with one writer per destination value.
-8. Overlap (pigment only): post receives and sends, fill the physical-wall ghosts, update the strict local interior, wait for all requests, then update the remaining local boundary cells exactly once. The flow exchanges are blocking.
+8. Overlap: for the pigment, post receives and sends, fill the physical-wall ghosts, update the strict local interior, wait for all requests, then update the remaining local boundary cells exactly once. In every CG iteration, start the exchange of $p$, compute $Ap$ on the inner corners, wait, then compute the edge corners exactly once. The corner exchanges of $\psi$ and $\zeta$, once per step, stay blocking.
 9. Complete outstanding sends and receives before swapping or reusing their buffers. Do not update a receive region while communication is pending.
 
 ### Strict interior under overlap
@@ -112,6 +114,8 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 The strict interior is the set of owned cells whose stencil reads no halo cell that is still being received. With halo width $h$ (currently 1), that means cells at least $h$ cells away from every **internal** edge. Cells next to a **physical** edge may be in the strict interior, because their ghosts are filled locally before the update. If `halo` is increased later, this region shrinks accordingly; derive it from `halo`, do not hard-code an offset of 1.
 
 At one or two cells per local dimension, the overlap interior may be empty. Use a correct boundary-region partition without duplicate updates or out-of-range accesses. Reject decompositions that assign zero-sized local domains.
+
+The CG's inner corners follow the same rule for the operator $A$, which reads one corner in each direction: the unknown corners one corner away from every edge shared with another rank (`overlap_split` in `poisson.hpp`). `tests/test_poisson.cpp` checks that the inner corners and the edge strips cover every unknown corner exactly once, for every combination of walls; `tests/test_halo.cpp` sets the process halos to NaN before each overlapping exchange, so that any halo value read too early would spoil the solution.
 
 ### Communication details
 
@@ -124,3 +128,5 @@ The Cartesian communicator is created with `reorder = 0`, so its ranks are the w
 The total mass $M = \Delta x\,\Delta y\sum c_{i,j}$, the energy and the enstrophy need a local sum followed by an `MPI_Allreduce`. They are computed before and after the timed loop and at snapshots, never every step inside the timed region, and differ from the serial values in the last digits because the summation order differs. The speed check every `check_interval` steps needs one `MPI_Allreduce` with `MPI_MAX`, which is exact.
 
 Gather only small fields for validation or selected visual output, outside solver timing. Use a barrier before the timed region and reduce local elapsed times with `MPI_MAX` after it. The timed loop includes the halo exchanges, the physical-wall ghost fill and the whole flow step. A global barrier is not required after every time step when neighbor exchanges already enforce the required dependencies.
+
+The Poisson time and the CG iterations cover the solves of the timed loop only; the spin-up's solves are part of the spin-up time. `MpiComm` adds up the time inside the CG's halo exchanges and global sums (`MPI_Wtime` around each call); the solver reports each as the largest over the ranks (`poisson_halo_s`, `poisson_sum_s`).

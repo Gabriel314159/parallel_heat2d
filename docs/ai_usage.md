@@ -38,6 +38,15 @@ On 29 October 2026, Anthropic Claude (Claude Code, local session; Claude Sonnet 
 
 Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
 
+Later on 29 October 2026, Anthropic Claude (Claude Code, local session; Claude Opus 5.5) listed what was missing before the HPC runs and, at the team's request, changed the parallel solver:
+
+- Overlap in the conjugate gradient solve: with `--exchange overlap`, the halo exchange of the search direction now runs while $Ap$ is computed at the corners that read no process halo, and the edge corners follow once the exchange is complete. Before, only the pigment exchange overlapped. Files: `src/common/poisson.hpp`, `src/parallel/poisson_comm.hpp` (new; the MPI part of the CG moved out of `solver.cpp`) and `src/parallel/solver.cpp`.
+- A binding check: each rank counts the physical cores its threads may run on (from the Linux affinity masks, `src/common/affinity.hpp`); the run reports the fewest (`cores_per_rank`) and warns when that is below the threads per rank.
+- Phase timers for the time inside the CG's halo exchanges and global sums (`poisson_halo_s`, `poisson_sum_s`). The Poisson time and the CG iteration counts now cover the timed loop only; before, they included the spin-up.
+- Checks run during the session (Apple M-series laptop, Open MPI 5.0): new tests in `test_poisson` (the inner corners and edge strips cover every unknown corner exactly once for all wall combinations; on one process the overlapping path gives exactly the blocking result), in `test_halo` (the blocking and overlapping CG against the serial solution on 1, 4 and 6 ranks, with the process halos set to NaN before each overlapping exchange) and a new `test_affinity`; all 17 `ctest` entries pass, and all 12 correctness cases agree with the serial field within 1.2e-13. Two deliberate faults (computing all corners before the exchange completes; leaving out one edge strip) made the new MPI test fail. macOS reports no affinity masks, so the core count was only checked to be 0 there; its Linux path is covered by `test_affinity`, which has not yet run on Linux. An informal laptop timing (4 ranks, 256 × 512 cells, 30 steps) showed no difference between blocking and overlap beyond the run-to-run noise.
+
+Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
+
 ## Append future entries
 
 For each substantial use, record:

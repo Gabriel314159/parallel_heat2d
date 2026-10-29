@@ -2,7 +2,7 @@
   "schema_version": 5,
   "kind": "strategies",
   "defaults": "benchmark_problem.json",
-  "description": "Experiment 4: communication strategy. The fixed problem P on 16 ranks x 1 thread, with row or 2D decomposition and blocking or overlapping pigment exchange (four runs). The layout stays at pure MPI, where communication matters most. Note that --exchange applies to the pigment halo only; see docs/experiment_plan.md.",
+  "description": "Experiment 4: communication strategy. The fixed problem P on 16 ranks x 1 thread, with row or 2D decomposition and blocking or overlapping halo exchange (four runs). --exchange applies to the pigment exchange (once per step) and to the CG exchange (every iteration); the CG's global sums always wait. The layout stays at pure MPI, where communication matters most. See docs/experiment_plan.md.",
   "execution": {"backend": "parallel"},
   "total_cores": 16,
   "resources": [

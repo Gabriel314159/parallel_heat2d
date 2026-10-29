@@ -82,6 +82,11 @@ void add_config(JsonObject& json, const Config& c) {
     json.add("blob_width", c.blob_width);
 }
 
+// CG iterations per Poisson solve of the main loop.
+double iterations_mean(const RunSummary& s) {
+    return s.poisson_solves > 0 ? static_cast<double>(s.poisson_iterations) / s.poisson_solves : 0.0;
+}
+
 std::ofstream open_for_writing(const std::string& path, std::ios::openmode mode = std::ios::out) {
     ensure_parent_directory(path);
     std::ofstream out(path, mode);
@@ -116,6 +121,7 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("mpi_ranks", s.mpi_ranks);
     json.add("omp_threads", s.omp_threads);
     json.add("nodes", s.nodes);
+    json.add("cores_per_rank", s.cores_per_rank);
     json.add("decomposition", s.decomposition);
     json.add("exchange", s.exchange);
     json.add("py", s.py);
@@ -123,7 +129,9 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("elapsed_s", s.elapsed_s);
     json.add("spinup_s", s.spinup_s);
     json.add("poisson_s", s.poisson_s);
-    json.add("poisson_iterations_mean", s.flow_steps > 0 ? static_cast<double>(s.poisson_iterations) / s.flow_steps : 0.0);
+    json.add("poisson_halo_s", s.poisson_halo_s);
+    json.add("poisson_sum_s", s.poisson_sum_s);
+    json.add("poisson_iterations_mean", iterations_mean(s));
     json.add("poisson_iterations_max", s.poisson_iterations_max);
     json.add("snapshot_s", s.snapshot_s);
     const double updates = static_cast<double>(c.nx) * c.ny * c.steps;
@@ -155,8 +163,10 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
     if (c.wind == Wind::periodic) out << ", alpha = " << c.wind_alpha << ", period = " << c.wind_period;
     if (s.solver == "heat_parallel") {
         out << "\n  parallel: " << s.mpi_ranks << " ranks x " << s.omp_threads << " threads on " << s.nodes
-            << (s.nodes == 1 ? " node, " : " nodes, ") << s.py << " x " << s.px << " process grid, "
-            << s.decomposition << " decomposition, " << s.exchange << " exchange";
+            << (s.nodes == 1 ? " node, " : " nodes, ");
+        if (s.cores_per_rank > 0) out << "at least " << s.cores_per_rank << " cores per rank, ";
+        out << s.py << " x " << s.px << " process grid, " << s.decomposition << " decomposition, " << s.exchange
+            << " exchange";
     }
     out << "\n  largest measured speeds: u = " << s.u_max_measured << ", v = " << s.v_max_measured
         << " (estimate --max-speed " << c.max_speed << ")\n"
@@ -165,10 +175,13 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
         << "  solver loop: " << s.elapsed_s << " s ("
         << (s.elapsed_s > 0 ? updates / s.elapsed_s : 0.0) << " cell updates/s)";
     if (s.spinup_s > 0) out << ", spin-up: " << s.spinup_s << " s";
-    out << ", of which Poisson: " << s.poisson_s << " s ("
-        << (s.flow_steps > 0 ? static_cast<double>(s.poisson_iterations) / s.flow_steps : 0.0)
-        << " CG iterations per step on average, at most " << s.poisson_iterations_max << ")";
     if (s.snapshot_s > 0) out << ", snapshots: " << s.snapshot_s << " s";
+    out << "\n  Poisson solves in the loop: " << s.poisson_s << " s (" << iterations_mean(s)
+        << " CG iterations per step on average, at most " << s.poisson_iterations_max << ")";
+    if (s.solver == "heat_parallel") {
+        out << "; inside them, halo exchanges " << s.poisson_halo_s << " s and global sums " << s.poisson_sum_s
+            << " s";
+    }
     out << "\n  pigment mass: initial " << s.mass_initial << ", final " << s.mass_final
         << ", relative change " << s.mass_error << "\n";
     if (std::isfinite(s.cosine_discrete_error)) {

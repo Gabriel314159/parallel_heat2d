@@ -21,7 +21,7 @@ Do not assume that a generic `mpiexec` command or scheduler header is valid on e
 
 1. Build in Release mode with the selected compiler and MPI environment.
 2. Run the correctness checks (experiment 0, `scripts/check_correctness.py`) inside an allocation. The timings are only believed if they pass with this build on this machine.
-3. Verify the CPU allocation, actual thread count and rank placement. The run report and the `RESULT` line give the ranks, threads and nodes the solver actually used; binding is not reported and must be checked separately.
+3. Verify the CPU allocation, actual thread count and rank placement. The run report and the `RESULT` line give the ranks, threads and nodes the solver actually used, and the fewest physical cores any rank may run on (`cores_per_rank`). `heat_parallel` warns when that is below the threads per rank: the launcher has bound the ranks too tightly (with Open MPI, for example, one or two ranks are bound to a single core each by default). Tell the launcher the cores per rank, check the binding once with its report option, and record the options used.
 4. Run experiments 1 to 5 of [experiments/README.md](../experiments/README.md), in that order, with the planned warmups and measured repetitions and without unrelated concurrent work. Time one run of the benchmark problem first, and adjust its size in `experiments/benchmark_problem.json` if needed.
 5. Copy compact raw metrics and environment records into `results/raw/`.
 6. Generate figures from those metrics and cite the exact commit/configuration in the report.

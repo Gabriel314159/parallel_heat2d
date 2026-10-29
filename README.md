@@ -71,7 +71,7 @@ OMP_NUM_THREADS=2 mpiexec -n 4 ./build/heat_parallel --nx 256 --ny 256 --steps 1
     --decomp 2d --exchange overlap --output outputs/final_parallel.csv
 ```
 
-Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--exchange blocking|overlap`, `--py N --px N` for a fixed process grid, and `--threads N` for the OpenMP threads per rank. Each run prints a short report and ends with a `RESULT {...}` line of JSON: all parameters, `dt`, the solver-loop time (the maximum over ranks), the relative mass change and the Péclet numbers. With `--output`, the final field is written as CSV (or as binary `.npy` if the path ends in `.npy`) and the same JSON is written next to it. [config/README.md](config/README.md) lists every option.
+Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--exchange blocking|overlap`, `--py N --px N` for a fixed process grid, and `--threads N` for the OpenMP threads per rank. Each run prints a short report and ends with a `RESULT {...}` line of JSON: all parameters, `dt`, the solver-loop time (the maximum over ranks), the time of the Poisson solves with the parts spent in their halo exchanges and global sums, the relative mass change and the Péclet numbers. With `--output`, the final field is written as CSV (or as binary `.npy` if the path ends in `.npy`) and the same JSON is written next to it. [config/README.md](config/README.md) lists every option.
 
 | Mode | Purpose |
 | --- | --- |
@@ -79,9 +79,9 @@ Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--
 | `heat_parallel --decomp rows` | MPI row decomposition; each rank owns a band of rows. |
 | `heat_parallel --decomp 2d` | Two-dimensional MPI process grid (`--py`, `--px`, or chosen automatically). |
 | `heat_parallel --exchange blocking` | Halo exchange with `MPI_Sendrecv`, then the update. |
-| `heat_parallel --exchange overlap` | Nonblocking halo exchange; the interior is updated while messages travel. |
+| `heat_parallel --exchange overlap` | Nonblocking halo exchanges: the interior of the pigment update and of the CG's $Ap$ is computed while messages travel. |
 
-Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used. If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
+Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used, and on Linux the fewest cores any rank may run on (`cores_per_rank`); the solver warns when a rank has fewer cores than threads, which means the launcher bound it too tightly. If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
 
 ## Preview the dynamics
 

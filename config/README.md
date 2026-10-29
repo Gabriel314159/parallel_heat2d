@@ -61,7 +61,7 @@ These apply to the parallel solver, `heat_parallel`; `heat_serial` ignores them 
 | `execution.mpi_ranks` | MPI launch option | Number of MPI ranks. |
 | `execution.omp_threads` | `OMP_NUM_THREADS` (set by the scripts) or `--threads` | Threads per rank. `--threads N` overrides `OMP_NUM_THREADS`; with neither, 1. The run reports the number actually used (`omp_threads`) and the number of nodes (`nodes`). |
 | `execution.decomposition` | `--decomp` | `rows` or `2d`. |
-| `execution.exchange` | `--exchange` | `blocking` or `overlap`. |
+| `execution.exchange` | `--exchange` | `blocking` or `overlap`, for the halo exchanges of the pigment and of the CG solve. |
 | `execution.process_grid` | `--py`, `--px` | Optional `[py, px]`; `py*px` must equal the number of ranks. |
 
 `serial` requires one rank and one thread. MPI must be launched by the appropriate local or HPC launcher. Without `--py`/`--px`, the 2D process grid is chosen with `MPI_Dims_create`, as square as possible, with more process columns than rows when `nx > ny`. Grids that would leave a rank with zero rows or columns are rejected. Local blocks of one or two cells are handled correctly, even when no strictly interior region remains for overlap.

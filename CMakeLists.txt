@@ -88,7 +88,7 @@ endif()
 
 if(HEAT2D_BUILD_TESTS)
     enable_testing()
-    foreach(HEAT2D_TEST velocity config grid io poisson flow)
+    foreach(HEAT2D_TEST velocity config grid io poisson flow affinity)
         add_executable(test_${HEAT2D_TEST} tests/test_${HEAT2D_TEST}.cpp)
         target_link_libraries(test_${HEAT2D_TEST} PRIVATE heat2d_common)
         add_test(NAME ${HEAT2D_TEST} COMMAND test_${HEAT2D_TEST})

@@ -17,6 +17,7 @@
 #include <omp.h>
 #endif
 
+#include "common/affinity.hpp"
 #include "common/corners.hpp"
 #include "common/flow.hpp"
 #include "common/grid.hpp"
@@ -26,6 +27,7 @@
 #include "common/poisson.hpp"
 #include "parallel/decomposition.hpp"
 #include "parallel/halo.hpp"
+#include "parallel/poisson_comm.hpp"
 
 namespace {
 
@@ -42,24 +44,12 @@ void update_region(const Field& c, Field& next, const FaceVelocities& vel, const
     }
 }
 
-// The global sums and the halo exchange the CG solver needs, over MPI.
-class MpiComm : public PoissonComm {
-public:
-    MpiComm(MPI_Comm comm, HaloExchange& halos) : comm_(comm), halos_(halos) {}
-    void sum(double* values, int count) const override {
-        mpi_check(MPI_Allreduce(MPI_IN_PLACE, values, count, MPI_DOUBLE, MPI_SUM, comm_), "Poisson solver sum");
-    }
-    void exchange(Field& f) const override { halos_.exchange(f); }
-
-private:
-    MPI_Comm comm_;
-    HaloExchange& halos_;
-};
-
-// Time and CG iterations of one Poisson solve.
+// Time and CG iterations of one Poisson solve, and the time inside its
+// communication (see CommTimes).
 struct PoissonWork {
     double seconds = 0.0;
     int iterations = 0;
+    CommTimes comm;
 };
 
 // The flow state of one rank's block and one time step of it
@@ -73,7 +63,8 @@ public:
           r0_(block_.ny, block_.nx), r1_(block_.ny, block_.nx), r2_(block_.ny, block_.nx),
           coeffs_(make_flow_coeffs(cfg.viscosity, dx, dy)),
           profile_(wind_profile(cfg, block_)), unknown_(unknown_corners(block_)),
-          poisson_(block_, dx, dy, cfg.poisson_tol, cfg.poisson_max_iter), comm_(layout.comm, halos) {}
+          poisson_(block_, dx, dy, cfg.poisson_tol, cfg.poisson_max_iter),
+          comm_(layout.comm, halos, cfg.exchange == Exchange::overlap) {}
 
     // Advance zeta and psi from flow step s (time s dt) to s + 1, and refresh
     // the face velocities. Returns the time and iterations of the Poisson solve.
@@ -101,9 +92,10 @@ public:
 
         // psi still holds psi^n: the warm start of the solve. All ranks take
         // the same number of iterations, because they see the same global sums.
+        comm_.reset_times();
         const double start = MPI_Wtime();
         const CgStats stats = poisson_.solve(zeta_, psi_, comm_);
-        const PoissonWork work{MPI_Wtime() - start, stats.iterations};
+        const PoissonWork work{MPI_Wtime() - start, stats.iterations, comm_.times()};
 
         zero_wall_ghost_corners(psi_, block_);
         halos_.exchange_with_corners(psi_);
@@ -246,6 +238,12 @@ double max_over_ranks(double value, MPI_Comm comm) {
     return result;
 }
 
+int min_over_ranks(int value, MPI_Comm comm) {
+    int result = 0;
+    mpi_check(MPI_Allreduce(&value, &result, 1, MPI_INT, MPI_MIN, comm), "global minimum");
+    return result;
+}
+
 // File output happens on rank 0 only. If it fails there, the other ranks
 // would wait forever in the next collective call, and unwinding the stack
 // first would call MPI_Comm_free (a collective call) while they wait. So stop
@@ -312,6 +310,15 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     check_same_threads(threads, layout.comm);
     const int nodes = count_nodes(layout);
 
+    // Threads that share a core make the timings meaningless per core: warn,
+    // but run, so that the run report shows what happened.
+    const int cores = min_over_ranks(allowed_cores(), layout.comm);
+    if (layout.rank == 0 && cores > 0 && cores < threads) {
+        std::cerr << "heat_parallel: warning: a rank may run on only " << cores << (cores == 1 ? " core" : " cores")
+                  << " for its " << threads << " threads, so threads share cores. Check how the launcher binds "
+                  << "ranks to cores (hpc/README.md).\n";
+    }
+
     const double dx = cfg.lx / cfg.nx;
     const double dy = cfg.ly / cfg.ny;
     const double dt = time_step(cfg);
@@ -342,19 +349,10 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     };
 
     // Spin-up: the flow alone, from rest.
-    double poisson_seconds = 0.0;
-    long poisson_iterations = 0;
-    int poisson_iterations_max = 0;
-    auto flow_step = [&](long s) {
-        const PoissonWork work = flow.step(s, vel);
-        poisson_seconds += work.seconds;
-        poisson_iterations += work.iterations;
-        poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
-    };
     mpi_check(MPI_Barrier(layout.comm), "barrier before the spin-up");
     const double spinup_start = MPI_Wtime();
     for (long s = 0; s < spinup; ++s) {
-        flow_step(s);
+        flow.step(s, vel);
         check(s + 1);
     }
     const double local_spinup = MPI_Wtime() - spinup_start;
@@ -393,6 +391,20 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
         });
     }
 
+    // The Poisson solves of the timed loop; the spin-up's are part of its time.
+    double poisson_seconds = 0.0;
+    CommTimes poisson_comm;
+    long poisson_iterations = 0;
+    int poisson_iterations_max = 0;
+    auto flow_step = [&](long s) {
+        const PoissonWork work = flow.step(s, vel);
+        poisson_seconds += work.seconds;
+        poisson_comm.halo += work.comm.halo;
+        poisson_comm.sum += work.comm.sum;
+        poisson_iterations += work.iterations;
+        poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
+    };
+
     mpi_check(MPI_Barrier(layout.comm), "barrier before the timed loop");
     const double start = MPI_Wtime();
     for (int n = 0; n < cfg.steps; ++n) {
@@ -430,6 +442,8 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     const double loop_seconds = max_over_ranks(local_loop, layout.comm);
     const double spinup_seconds = max_over_ranks(local_spinup, layout.comm);
     const double poisson_max = max_over_ranks(poisson_seconds, layout.comm);
+    const double poisson_halo_max = max_over_ranks(poisson_comm.halo, layout.comm);
+    const double poisson_sum_max = max_over_ranks(poisson_comm.sum, layout.comm);
     const double mass_final = sum_over_ranks(local_mass(current, dx, dy), layout.comm);
     double e = 0.0, z = 0.0;
     local_energy_enstrophy(flow.psi(), flow.zeta(), b, dx, dy, e, z);
@@ -451,6 +465,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     s.mpi_ranks = layout.size;
     s.omp_threads = threads;
     s.nodes = nodes;
+    s.cores_per_rank = cores;
     s.py = layout.py;
     s.px = layout.px;
     s.decomposition = decomp_name(cfg.decomposition);
@@ -462,9 +477,11 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     s.elapsed_s = loop_seconds;
     s.spinup_s = spinup_seconds;
     s.poisson_s = poisson_max;
+    s.poisson_halo_s = poisson_halo_max;
+    s.poisson_sum_s = poisson_sum_max;
     s.poisson_iterations = poisson_iterations;
     s.poisson_iterations_max = poisson_iterations_max;
-    s.flow_steps = spinup + cfg.steps;
+    s.poisson_solves = cfg.steps;
     s.snapshot_s = snapshot_seconds;
     s.mass_initial = mass0;
     s.mass_final = mass_final;

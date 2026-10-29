@@ -1,34 +1,25 @@
 # Experiments
 
-This folder holds one correctness check and five performance experiments. Each experiment changes one factor and keeps the others fixed, so a difference in the results can be traced to that factor. The measurement protocol is in [docs/experiment_plan.md](../docs/experiment_plan.md).
+This markdown file explains our experimental design, including one correctness check and five performance experiments. Each experiment changes one factor and keeps the others fixed. The measurement protocol is in [docs/experiment_plan.md](../docs/experiment_plan.md).
 
-| # | Experiment | Question | What changes | What stays fixed | File |
+| # | Experiment | Question | What changes | What stays fixed | JSON File |
 | --- | --- | --- | --- | --- | --- |
-| 0 | Correctness | Does every parallel configuration give the serial answer? | ranks, threads, decomposition, exchange | small grids; nothing is timed | [correctness.json](correctness.json) |
+| 0 | Correctness | Does every parallel configuration replicate the serial answer? | ranks, threads, decomposition, exchange | small grids; nothing is timed | [correctness.json](correctness.json) |
 | 1 | Serial vs MPI (strong scaling over ranks) | How much faster do more ranks make the same problem? | ranks: 1, 2, 4, 8, 16 | $P$, one thread per rank, 2D, blocking | [strong_scaling_mpi.json](strong_scaling_mpi.json) |
 | 2 | Serial vs OpenMP (strong scaling over threads) | How much faster do more threads make the same problem? | threads: 1, 2, 4, 8, 16 | $P$, one rank | [strong_scaling_openmp.json](strong_scaling_openmp.json) |
 | 3 | Pure MPI vs MPI + OpenMP | With 16 cores, how should they be split between ranks and threads? | ranks × threads: 16×1, 8×2, 4×4, 2×8, 1×16 | $P$, 16 cores, 2D, blocking | [hybrid_layouts.json](hybrid_layouts.json) |
 | 4 | Communication strategy | Do the decomposition and the exchange mode matter? | rows or 2D; blocking or overlap | $P$, 16 ranks × 1 thread | [communication.json](communication.json) |
 | 5 | Weak scaling | Does the time stay the same when the work per rank stays the same? | ranks: 1, 4, 16 (the domain grows) | 512 × 512 cells and 4 threads per rank | [weak_scaling.json](weak_scaling.json) |
 
-$P$ is the fixed problem of [benchmark_problem.json](benchmark_problem.json): 512 × 1024 cells and 100 steps, with the flow starting at rest. Its size is provisional; see below.
-
-## Correctness and performance
-
-Experiment 0 asks whether the answer is right. Experiments 1 to 5 ask how fast.
-
-- **Correctness** runs twelve small cases (at most 40 × 32 cells), each once, and compares the final field cell by cell with the serial result, within $10^{-10}$. Nothing is timed. The cases cover MPI only, OpenMP only and MPI + OpenMP, rows and 2D blocks, blocking and overlapping exchange, uneven splits and tiny blocks, because errors hide in odd cases. `scripts/check_correctness.py` labels each run with its layout.
-- **The performance experiments** use the large problem $P$, run each configuration six times (one warm-up, five measured) and report times, speedups and efficiencies. They never compare fields.
-
-They turn the same knobs, which is why they look alike, but one cannot replace the other: a wrong parallel code can still show a good speedup. So correctness runs first, with the same build on the same machine, and the timings are only believed if it passes.
+$P$ is the fixed problem specified in [benchmark_problem.json](benchmark_problem.json): 512 × 1024 cells, 1×2 rectangular boundary,  and 100 steps, with the flow starting at rest.
 
 ## How the experiments fit together
 
-- **Strong scaling is experiments 1 and 2.** Both hold $P$ fixed and add resources: first ranks (the serial vs MPI comparison, one thread per rank), then threads (the serial vs OpenMP comparison, one rank). Serial vs MPI is not a separate sweep from strong scaling; it is strong scaling over ranks.
+- **Strong scaling is experiments 1 and 2.** Both hold $P$ fixed and add resources: first ranks (the serial vs MPI comparison, one thread per rank), then threads (the serial vs OpenMP comparison, one rank).
 - **Experiments 3 and 4 were one file.** `strategies.json` crossed three factors (layout, decomposition and exchange: 20 configurations). Now experiment 3 changes only the layout and experiment 4 changes only the decomposition and the exchange. Interactions between the factors are not measured; if experiment 3 or 4 shows an effect that may depend on the other factor, add a file that crosses them.
 - **The baseline is 2D decomposition with blocking exchange** in experiments 1, 2, 3 and 5. Experiment 4 shows whether another choice is better.
 - **Experiment 5 is the only one in which the problem grows.**
-- **Experiment 4 has a limit.** `--exchange` changes only the exchange of the pigment, once per step; the Poisson solve, which takes about 99% of the run time, always blocks. Expect no visible difference between blocking and overlap until the conjugate gradient iteration overlaps its own exchange (see the plan).
+- **What experiment 4 can show.** `--exchange` selects how both halo exchanges run: the pigment's, once per step, and the conjugate gradient's, once per iteration. The two global sums of every iteration always wait, so overlap can save at most the time of the CG's halo exchanges, which every run reports (`poisson_halo_s`). See the plan.
 
 ## Order and repeated runs
 
@@ -44,7 +35,7 @@ The grid and the number of steps are provisional. They are chosen so that a seri
 
 ## File format
 
-- Every file has `schema_version` 5, the same number as [config/defaults.json](../config/defaults.json). Every experiment file also has a `kind`, which says how it expands into runs.
+- Every file has `schema_version` 5, the same number as [config/defaults.json](../config/defaults.json). 
 - `defaults` names the file to inherit, relative to the file that names it. The experiments inherit `benchmark_problem.json`, which inherits `config/defaults.json`; the chain is resolved from the inside out (`resolve_base` in [scripts/heat2d_tools.py](../scripts/heat2d_tools.py)). Result paths are relative to the repository working directory.
 - Each experiment writes its raw measurements to `results/raw/<file name>.csv` and its other files to `outputs/<file name>/`.
 
