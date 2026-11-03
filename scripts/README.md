@@ -8,12 +8,12 @@
 | `animate_field.py` | Implemented | Turn a snapshot folder into a GIF or MP4 of the pigment, the vorticity or $\psi$ (`--field`), with a fixed colour scale, the time and the mass change or energy in the title, and optional streamlines (`--flow`). |
 | `heat2d_tools.py` | Implemented | Shared helpers: merge the JSON configuration (an experiment inherits its `defaults` file, which may inherit another), build solver command lines, parse the solver's `RESULT` line. |
 | `fieldviz.py` | Implemented | Shared plotting helpers: read the output formats, colour scales, streamlines and arrows from $\psi$. |
-| `run_benchmarks.py` | Planned | Expand explicit experiment resources, preserve resolved parameters, run warmups/repetitions and append raw measurement records. |
+| `run_benchmarks.py` | Implemented | Run one performance experiment (`--config experiments/<name>.json`), adapted from the main branch's runner. It expands the file as `experiments/README.md` describes ("Run expansion"), runs every configuration `warmup_runs` + `repetitions` times one after another, and appends one row per run, warmups included, to the file's `metrics_csv`. It writes the resolved plan, the environment and every run's output to `<output.directory>/<session>/`. Failed runs are kept as rows with status `error`. |
 | `plot_results.py` | Planned | Read measured CSV files and produce timing, speedup, efficiency and strategy-comparison figures. |
 
 ## Requirements
 
-- `check_correctness.py` uses only the Python standard library (Python 3.9+), so it runs wherever the solver does. CTest runs it as the `correctness_serial` and `correctness_parallel` tests.
+- `check_correctness.py` and `run_benchmarks.py` use only the Python standard library (Python 3.9+), so they run wherever the solver does. CTest runs `check_correctness.py` as the `correctness_serial` and `correctness_parallel` tests.
 - The plotting scripts need NumPy and Matplotlib 3.6+: `python3 -m pip install -r requirements.txt`. MP4 output also needs `ffmpeg`.
 - Build the solver first: `cmake -S . -B build && cmake --build build`. The scripts look for it in `build/` (option `--build-dir`).
 
@@ -23,6 +23,10 @@
 # All correctness checks, serial and parallel (fields go to outputs/correctness/)
 python3 scripts/check_correctness.py
 python3 scripts/check_correctness.py --launcher "mpiexec --oversubscribe -n {ranks}"   # fewer than 6 cores
+
+# A performance experiment: first the plan (configurations and commands), then the runs
+python3 scripts/run_benchmarks.py --config experiments/strong_scaling_mpi.json --dry-run
+python3 scripts/run_benchmarks.py --config experiments/strong_scaling_mpi.json --run serial_reference --run p4_t1_2d_blocking
 
 # Snapshots: pigment, psi and vorticity every 500 steps
 OMP_NUM_THREADS=2 mpiexec -n 4 ./build/heat_parallel --decomp 2d \
@@ -45,7 +49,15 @@ Every script has `--help`. Useful options:
 
 Colours: non-negative fields use one blue scale from near-white (no pigment) to dark blue; signed fields such as the vorticity, $\psi$ or `cosine_decay` use a blue/red scale with a neutral grey at zero. The animation keeps one colour scale for all frames: for the pigment, fading by diffusion stays visible, and by the discrete maximum principle no frame leaves the range of the first; for the vorticity and $\psi$, the scale covers the largest value of all frames. Streamlines are drawn as contours of $\psi$, which are exactly the streamlines of the flow.
 
-## Runner requirements (for the planned benchmark tools)
+`run_benchmarks.py` options for a cluster:
+
+- `--launcher` and `--mpi-arg=VALUE` (repeated) build the launch command, as on the main branch. The options may contain placeholders: `{ranks}` and `{threads}`; with `--cores-per-node`, `{nodes}` and `{ranks_per_node}`; with `--sockets-per-node` as well, `{ranks_per_socket}`. A placeholder that is not a whole number for some configuration stops the plan before anything runs.
+- `--launch-serial` starts the serial reference through the launcher with one task, so that it is bound to a core like the other runs.
+- `--require-binding` counts a run as failed unless it reports `binding` `cores`.
+- `--allocated-cores N` declares the cores of a multi-node allocation (by default, the cores this process may use).
+- `--run NAME` (repeated) runs only some configurations, for example to split an experiment over jobs; `--dry-run` lists the names. `--keep-going` continues after a failed run; `--timeout` limits each run (default 3600 s).
+
+## Runner requirements
 
 - Use `subprocess.run` with an argument list, not shell-interpolated command text.
 - Set thread environment variables explicitly and preserve launcher/resource metadata.
