@@ -25,7 +25,7 @@ gate() {
 
 RUN=(python3 scripts/run_benchmarks.py --build-dir "$BUILD" --launcher "$MPIRUN" --launch-serial --require-binding
      --allocated-cores "$(wc -l < "$PBS_NODEFILE")" --timeout "${HEAT2D_TIMEOUT:-3600}" --mpi-arg=--report-bindings
-     --mpi-arg=-x --mpi-arg=OMP_PLACES --mpi-arg=-x --mpi-arg=OMP_PROC_BIND --mpi-arg=-x --mpi-arg=LD_LIBRARY_PATH)
+     --mpi-arg=-x --mpi-arg=OMP_PLACES --mpi-arg=-x --mpi-arg=OMP_PROC_BIND)
 CORE=(--mpi-arg=--map-by --mpi-arg=core --mpi-arg=--bind-to --mpi-arg=core)
 SOCKET=(--mpi-arg=--map-by "--mpi-arg=ppr:{ranks_per_socket}:socket:PE={threads}" --mpi-arg=--bind-to --mpi-arg=core
         --cores-per-node 64 --sockets-per-node 2)

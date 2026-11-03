@@ -94,7 +94,7 @@ qsub -P <project> hpc/jobs/exp3_gpu.pbs
 
 With `-P` and no `-q`, the default queue `auto` routes a job to `batch_cpu` or `batch_gpu`, which accept jobs only from it.
 
-`four_nodes.pbs` runs everything above one node (experiments 1 and 5 at 128 and 256 ranks, 3 and 4); `exp3_gpu.pbs` builds the GPU version. A failed run is recorded and the runner goes on with the next configuration; each run's launcher output, with `--report-bindings`, is in `outputs/<experiment>/<session>/`. Do not change the checkout on Vanda while jobs are queued: each job builds what is there when it starts. Vanda's Open MPI 5 starts its daemons over ssh, even on the job's own node, and they are found only with `mpirun --prefix $EBROOTPRRTE`; [jobs/mpirun.sh](jobs/mpirun.sh) adds it, and the jobs use it as the launcher.
+`four_nodes.pbs` runs everything above one node (experiments 1 and 5 at 128 and 256 ranks, 3 and 4); `exp3_gpu.pbs` builds the GPU version. A failed run is recorded and the runner goes on with the next configuration; each run's launcher output, with `--report-bindings`, is in `outputs/<experiment>/<session>/`. Do not change the checkout on Vanda while jobs are queued: each job builds what is there when it starts. Vanda's Open MPI 5 starts its daemons over ssh, even on the job's own node, and they are found only with `mpirun --prefix $EBROOTPRRTE`, and the ranks find the modules' libraries only with `-x LD_LIBRARY_PATH`; [jobs/mpirun.sh](jobs/mpirun.sh) adds both, and the jobs use it as the launcher.
 
 ## Large single runs
 
