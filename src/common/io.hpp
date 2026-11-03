@@ -54,6 +54,8 @@ struct RunSummary {
     double poisson_s = 0.0;
     double poisson_halo_s = 0.0;
     double poisson_sum_s = 0.0;
+    std::string poisson_device = "cpu";  // "cpu"; GPU build: "gpu" or "host (no GPU found)"
+    double poisson_copy_s = 0.0;         // host-GPU copies; max over ranks
     long poisson_iterations = 0;     // CG iterations over the main loop
     int poisson_iterations_max = 0;  // the most in one solve
     long poisson_solves = 0;         // solves in the main loop, one per step

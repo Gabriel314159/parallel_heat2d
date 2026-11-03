@@ -36,6 +36,7 @@ public:
         times_.halo += MPI_Wtime() - start;
     }
     bool overlap() const override { return overlap_; }
+    bool has_neighbours() const override { return halos_.has_neighbours(); }
     void start(Field& f) const override {
         const double start = MPI_Wtime();
         halos_.start(f);

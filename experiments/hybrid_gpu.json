@@ -1,0 +1,18 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 3, GPU runs: P with its Poisson solve on A40 GPUs (the GPU build of heat_parallel), one rank per GPU and per socket of 36 cores: 1 rank x 36 threads with one GPU, then 2 ranks x 36 threads with the two GPUs of a Vanda GPU node. The serial references are those of experiments 1 and 2. Blocking exchange only.",
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": false,
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 36},
+    {"mpi_ranks": 2, "omp_threads": 36}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/hybrid_gpu", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/hybrid_gpu.csv"
+}

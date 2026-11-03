@@ -30,6 +30,11 @@ public:
     // holds its neighbour's values.
     void exchange(Field& c);
 
+    // True if some side of the block borders another rank.
+    bool has_neighbours() const {
+        return north_ != MPI_PROC_NULL || south_ != MPI_PROC_NULL || west_ != MPI_PROC_NULL || east_ != MPI_PROC_NULL;
+    }
+
     // Nonblocking: post all receives, pack the columns and post all sends.
     // Until finish(), do not modify the interior of `c` or read its process halos.
     void start(Field& c);

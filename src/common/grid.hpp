@@ -74,6 +74,11 @@ public:
     // Raw access to the whole vector, ghosts included. Used for output and tests.
     const std::vector<double>& values() const { return values_; }
 
+    // The storage as one array, ghosts included: (i, j) is at i * stride() + j.
+    double* data() { return values_.data(); }
+    const double* data() const { return values_.data(); }
+    std::size_t size() const { return values_.size(); }
+
 private:
     // Position of cell (i, j) in values_. The first stored row is i = 1-halo
     // and the first stored column is j = 1-halo.

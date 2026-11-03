@@ -86,6 +86,16 @@ int count_nodes(const ProcessLayout& layout) {
     return nodes;
 }
 
+int rank_on_node(const ProcessLayout& layout) {
+    MPI_Comm shared = MPI_COMM_NULL;
+    mpi_check(MPI_Comm_split_type(layout.comm, MPI_COMM_TYPE_SHARED, layout.rank, MPI_INFO_NULL, &shared),
+              "shared-memory communicator");
+    int shared_rank = 0;
+    mpi_check(MPI_Comm_rank(shared, &shared_rank), "MPI_Comm_rank (shared-memory communicator)");
+    MPI_Comm_free(&shared);
+    return shared_rank;
+}
+
 Binding binding_over_nodes(const ProcessLayout& layout, const std::vector<int>& cores) {
     const int known = cores.empty() ? 0 : 1;
     int all_known = 0;

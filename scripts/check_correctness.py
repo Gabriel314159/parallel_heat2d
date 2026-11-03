@@ -86,6 +86,9 @@ def main() -> int:
     parser.add_argument("--serial-only", action="store_true", help="skip the serial/parallel comparisons")
     parser.add_argument("--launcher", default="mpiexec -n {ranks}", help="MPI launch command; {ranks} is replaced")
     parser.add_argument("--run", action="append", help="only this run name (may be repeated)")
+    parser.add_argument("--exchange", choices=["blocking", "overlap"],
+                        help="use this exchange in every parallel case (blocking for the GPU build)")
+    parser.add_argument("--require-gpu", action="store_true", help="fail parallel runs not solved on a GPU")
     args = parser.parse_args()
 
     experiment_path = Path(args.experiment).resolve()
@@ -93,6 +96,9 @@ def main() -> int:
     runs = resolve_runs(experiment_path)
     if args.run:
         runs = [run for run in runs if run["name"] in args.run]
+    if args.exchange:
+        for run in runs:
+            run["execution"]["exchange"] = args.exchange
 
     serial = executable(args.build_dir, "heat_serial")
     parallel_path = Path(args.build_dir) / "heat_parallel"
@@ -170,6 +176,9 @@ def main() -> int:
                         if launched["mpi_ranks"] != ranks:
                             results.append(("MPI ranks", False,
                                             f"requested {ranks}, the run used {launched['mpi_ranks']}"))
+                        if args.require_gpu and launched.get("poisson_device") != "gpu":
+                            results.append(("Poisson solve on a GPU", False,
+                                            f"it ran on {launched.get('poisson_device')!r}"))
                         if launched["omp_threads"] != threads:
                             results.append(("OpenMP threads", None,
                                             f"requested {threads}, the run used {launched['omp_threads']} "
@@ -177,12 +186,14 @@ def main() -> int:
                     except (RuntimeError, ValueError) as error:
                         results.append(("parallel run", False, str(error)))
 
-        print(f"{name}  ({problem['nx']} x {problem['ny']}, {problem['steps']} steps, case {problem['case']})")
+        exchange = run["execution"].get("exchange", "none")
+        print(f"{name}  ({problem['nx']} x {problem['ny']}, {problem['steps']} steps, case {problem['case']}, "
+              f"{exchange} exchange)")
         for check, passed, detail in results:
             mark = "ok  " if passed else ("--  " if passed is None else "FAIL")
             print(f"  {mark}  {check}: {detail}")
             failures += passed is False
-        report.append({"run": name, "checks": [
+        report.append({"run": name, "exchange": exchange, "checks": [
             {"check": check, "passed": passed, "detail": detail} for check, passed, detail in results]})
 
     report_dir = Path(args.output_dir or REPO / "outputs/correctness")

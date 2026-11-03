@@ -50,6 +50,8 @@ struct PoissonWork {
     double seconds = 0.0;
     int iterations = 0;
     CommTimes comm;
+    double copy_seconds = 0.0;  // GPU build: copies between host and GPU
+    bool on_device = false;     // GPU build: the solve ran on a GPU
 };
 
 // The flow state of one rank's block and one time step of it
@@ -95,7 +97,7 @@ public:
         comm_.reset_times();
         const double start = MPI_Wtime();
         const CgStats stats = poisson_.solve(zeta_, psi_, comm_);
-        const PoissonWork work{MPI_Wtime() - start, stats.iterations, comm_.times()};
+        const PoissonWork work{MPI_Wtime() - start, stats.iterations, comm_.times(), stats.copy_seconds, stats.on_device};
 
         zero_wall_ghost_corners(psi_, block_);
         halos_.exchange_with_corners(psi_);
@@ -323,6 +325,19 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     const LayoutGuard guard(layout);
     const Block& b = layout.block;
 
+#ifdef HEAT2D_USE_OFFLOAD
+    // One GPU per rank: the ranks of a node take its GPUs in turn
+    // (docs/design.md, "The Poisson solve on a GPU").
+    if (cfg.exchange == Exchange::overlap) {
+        throw std::invalid_argument("the GPU build supports only --exchange blocking");
+    }
+    const int devices = omp_get_num_devices();
+    const int node_rank = rank_on_node(layout);
+    if (devices > 0) omp_set_default_device(node_rank % devices);
+    if (layout.rank == 0 && devices == 0) {
+        std::cerr << "heat_parallel: warning: GPU build, but no GPU found; the Poisson solve runs on the host\n";
+    }
+#endif
     // Before the first OpenMP region, so that all loops below use this count.
     const int threads = configure_threads(cfg.threads.value_or(0));
     check_same_threads(threads, layout.comm);
@@ -409,6 +424,8 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
 
     // The Poisson solves of the timed loop; the spin-up's are part of its time.
     double poisson_seconds = 0.0;
+    double poisson_copy = 0.0;
+    bool poisson_on_device = false;
     CommTimes poisson_comm;
     long poisson_iterations = 0;
     int poisson_iterations_max = 0;
@@ -417,6 +434,8 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
         poisson_seconds += work.seconds;
         poisson_comm.halo += work.comm.halo;
         poisson_comm.sum += work.comm.sum;
+        poisson_copy += work.copy_seconds;
+        poisson_on_device = work.on_device;
         poisson_iterations += work.iterations;
         poisson_iterations_max = std::max(poisson_iterations_max, work.iterations);
     };
@@ -496,6 +515,12 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     s.poisson_s = poisson_max;
     s.poisson_halo_s = poisson_halo_max;
     s.poisson_sum_s = poisson_sum_max;
+    s.poisson_copy_s = max_over_ranks(poisson_copy, layout.comm);
+#ifdef HEAT2D_USE_OFFLOAD
+    // Every rank must have run its solve on a GPU for the run to count as one.
+    const int on_device = static_cast<int>(min_over_ranks(poisson_on_device ? 1 : 0, layout.comm));
+    s.poisson_device = cfg.steps == 0 ? "gpu (no solve)" : (on_device ? "gpu" : "host (no GPU found)");
+#endif
     s.poisson_iterations = poisson_iterations;
     s.poisson_iterations_max = poisson_iterations_max;
     s.poisson_solves = cfg.steps;

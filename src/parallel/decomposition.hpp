@@ -63,6 +63,9 @@ ProcessLayout make_layout(const Config& c, MPI_Comm world);
 // memory (MPI_COMM_TYPE_SHARED) form one node. Collective.
 int count_nodes(const ProcessLayout& layout);
 
+// This rank's number among the ranks of its node, from 0. Collective.
+int rank_on_node(const ProcessLayout& layout);
+
 // How the threads of all ranks are bound to physical cores. `cores` is the
 // core of each thread of this rank (thread_cores in common/affinity.hpp); all
 // ranks must have the same number of threads. The ranks of each node gather

@@ -15,6 +15,7 @@ option(HEAT2D_ENABLE_MPI "Build the parallel MPI target once its sources exist" 
 option(HEAT2D_ENABLE_OPENMP "Enable OpenMP in the parallel target" ON)
 option(HEAT2D_BUILD_TESTS "Build the unit tests (run them with ctest)" ON)
 option(HEAT2D_NATIVE "Optimise for this machine's CPU (-march=native); the binary may not run elsewhere" OFF)
+option(HEAT2D_OFFLOAD "heat_parallel: run the CG Poisson solve on a GPU with OpenMP target offload (nvc++ or clang++)" OFF)
 
 # Shared components: no MPI or OpenMP.
 add_library(heat2d_common STATIC
@@ -97,6 +98,27 @@ elseif(HEAT2D_ENABLE_MPI AND HEAT2D_PARALLEL_READY)
     list(APPEND HEAT2D_TARGETS heat_parallel)
 endif()
 
+# GPU build: the CG of heat_parallel on an A40 (docs/design.md). Empty
+# HEAT2D_OFFLOAD_FLAGS runs the target regions on the host, for testing.
+if(HEAT2D_OFFLOAD)
+    if(NOT TARGET heat_parallel OR NOT OpenMP_CXX_FOUND)
+        message(FATAL_ERROR "HEAT2D_OFFLOAD needs heat_parallel, built with MPI and OpenMP")
+    endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
+        # No fused multiply-add on the host or the GPU (as -ffp-contract=off).
+        set(HEAT2D_OFFLOAD_DEFAULT "-mp=gpu;-gpu=cc86,nofma;-Minfo=mp")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(HEAT2D_OFFLOAD_DEFAULT "-fopenmp;--offload-arch=sm_86")
+    else()
+        set(HEAT2D_OFFLOAD_DEFAULT "")
+        message(WARNING "HEAT2D_OFFLOAD: no GPU flags known for ${CMAKE_CXX_COMPILER_ID}; the target regions will run on the host")
+    endif()
+    set(HEAT2D_OFFLOAD_FLAGS "${HEAT2D_OFFLOAD_DEFAULT}" CACHE STRING "Offload compile and link flags for heat_parallel")
+    target_compile_definitions(heat_parallel PRIVATE HEAT2D_USE_OFFLOAD=1)
+    target_compile_options(heat_parallel PRIVATE ${HEAT2D_OFFLOAD_FLAGS})
+    target_link_options(heat_parallel PRIVATE ${HEAT2D_OFFLOAD_FLAGS})
+endif()
+
 if(HEAT2D_BUILD_TESTS)
     enable_testing()
     foreach(HEAT2D_TEST velocity config grid io poisson flow affinity)
@@ -124,7 +146,9 @@ if(HEAT2D_BUILD_TESTS)
         if(TARGET heat_parallel AND MPIEXEC_EXECUTABLE)
             add_executable(test_halo tests/test_halo.cpp src/parallel/decomposition.cpp src/parallel/halo.cpp)
             target_link_libraries(test_halo PRIVATE heat2d_common MPI::MPI_CXX)
-            target_compile_options(test_halo PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+            if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+                target_compile_options(test_halo PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+            endif()
             foreach(HEAT2D_RANKS 1 4 6)
                 add_test(NAME halo_${HEAT2D_RANKS}_ranks
                          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${HEAT2D_RANKS} ${HEAT2D_MPIEXEC_FLAGS}
@@ -183,5 +207,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         # solvers can agree bit for bit and both cells sharing a face compute
         # the identical flux.
         target_compile_options(${HEAT2D_TARGET} PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off ${HEAT2D_CPU_FLAGS})
+    endforeach()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
+    # No fused multiply-add, as -ffp-contract=off above.
+    foreach(HEAT2D_TARGET IN LISTS HEAT2D_TARGETS)
+        target_compile_options(${HEAT2D_TARGET} PRIVATE -Mnofma)
     endforeach()
 endif()
