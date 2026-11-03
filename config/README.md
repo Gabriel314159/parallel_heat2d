@@ -7,7 +7,7 @@ The solvers take command-line flags: the CLI column below, also listed by `heat_
 | JSON field | CLI | Meaning |
 | --- | --- | --- |
 | `problem.nx`, `problem.ny` | `--nx`, `--ny` | Global numbers of cells along x (columns) and y (rows). |
-| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Basin dimensions (default 1 × 2). |
+| `problem.lx`, `problem.ly` | `--lx`, `--ly` | Basin dimensions (default 1 × 1). |
 | `problem.steps` | `--steps` | Time steps after the pigment is released. |
 | `problem.kappa` | `--kappa` | Positive constant pigment diffusivity $\kappa$. |
 | `problem.cfl` | `--cfl` | Safety fraction of the largest stable time step; must be in `(0,1]`. |

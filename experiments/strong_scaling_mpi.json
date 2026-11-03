@@ -2,7 +2,7 @@
   "schema_version": 5,
   "kind": "strong_scaling",
   "defaults": "benchmark_problem.json",
-  "description": "Experiment 1: serial vs MPI (strong scaling over ranks). The fixed problem P on 1, 2, 4, 8 and 16 MPI ranks with one thread each, compared with the pure serial program.",
+  "description": "Experiment 1: serial vs MPI (strong scaling over ranks). The fixed problem P on 1, 2, 4, ..., 256 MPI ranks with one thread each, so up to 256 cores, compared with the pure serial program. Runs beyond one node fill each node before using the next.",
   "execution": {"backend": "parallel"},
   "decomposition": "2d",
   "exchange": "blocking",
@@ -12,7 +12,11 @@
     {"mpi_ranks": 2, "omp_threads": 1},
     {"mpi_ranks": 4, "omp_threads": 1},
     {"mpi_ranks": 8, "omp_threads": 1},
-    {"mpi_ranks": 16, "omp_threads": 1}
+    {"mpi_ranks": 16, "omp_threads": 1},
+    {"mpi_ranks": 32, "omp_threads": 1},
+    {"mpi_ranks": 64, "omp_threads": 1},
+    {"mpi_ranks": 128, "omp_threads": 1},
+    {"mpi_ranks": 256, "omp_threads": 1}
   ],
   "warmup_runs": 1,
   "repetitions": 5,

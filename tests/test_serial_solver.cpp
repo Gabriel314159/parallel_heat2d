@@ -27,19 +27,20 @@ void check(bool condition, const std::string& label) {
     if (!condition) ++failures;
 }
 
-// A small basin with a developed flow: 48 x 96 cells at Re = 50 (U = 1,
-// nu = 0.02, F0 = U nu (2 pi / ly)^3), after a short spin-up.
+// A small basin with a developed flow: 48 x 48 cells on the default 1 x 1
+// basin at Re = 50 (U = 1, nu = 0.02, F0 = U nu (2 pi / ly)^3), after a short
+// spin-up.
 Config small_basin(int steps) {
     Config c;
     c.nx = 48;
-    c.ny = 96;
+    c.ny = 48;
     c.steps = steps;
     c.spinup = 1.0;
     c.viscosity = 0.02;
-    c.wind_amplitude = 0.02 * M_PI * M_PI * M_PI;
+    c.wind_amplitude = 0.02 * std::pow(2 * M_PI / c.ly, 3);
     c.max_speed = 2.0;
     c.blob_width = 0.15;  // several cells wide even on a coarse grid
-    c.blob_y = 1.0;
+    c.blob_y = 0.5;
     c.blob_x = 0.3;
     c.check_interval = 10;
     return c;
@@ -101,7 +102,7 @@ int main() {
         // A strong wind with a far too small speed estimate: viscosity sets dt at
         // first, but the flow outgrows it and the advection limit is exceeded.
         Config c = small_basin(100);
-        c.wind_amplitude = 50.0;
+        c.wind_amplitude = 400.0;
         c.max_speed = 0.02;
         bool stopped = false;
         try {

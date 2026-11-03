@@ -52,13 +52,13 @@ int main() {
     {
         const Config c = parse({});
         validate(c);
-        check(c.nx == 256 && c.ny == 512 && c.lx == 1.0 && c.ly == 2.0, "1 x 2 basin on 256 x 512 cells");
-        check(c.viscosity == 1e-3 && c.wind_amplitude == 0.1 && c.spinup == 100.0 && c.max_speed == 2.0,
-              "flow defaults nu = 1e-3, F0 = 0.1, spin-up 100, speed estimate 2");
+        check(c.nx == 256 && c.ny == 256 && c.lx == 1.0 && c.ly == 1.0, "1 x 1 basin on 256 x 256 cells");
+        check(c.viscosity == 1e-3 && c.wind_amplitude == 0.8 && c.spinup == 100.0 && c.max_speed == 2.0,
+              "flow defaults nu = 1e-3, F0 = 0.8, spin-up 100, speed estimate 2");
         check(!c.dt, "dt is automatic by default");
 
         // The advection limit dt a <= 0.5 decides for these values.
-        const double dx = 1.0 / 256, dy = 2.0 / 512;
+        const double dx = c.lx / c.nx, dy = c.ly / c.ny;
         const double a = c.max_speed / dx + c.max_speed / dy;
         check(close(time_step(c), c.cfl * 0.5 / a, 1e-12), "automatic dt = cfl x 0.5 / a");
     }
@@ -68,7 +68,7 @@ int main() {
         Config c;
         c.nx = 64;
         c.ny = 128;
-        const double dx = 1.0 / 64, dy = 2.0 / 128, inverse_squares = 1 / (dx * dx) + 1 / (dy * dy);
+        const double dx = c.lx / c.nx, dy = c.ly / c.ny, inverse_squares = 1 / (dx * dx) + 1 / (dy * dy);
         // No flow: pigment diffusion or viscosity decides.
         const double expected = std::min(1.0 / (2 * c.kappa * inverse_squares), 0.1 / (c.viscosity * inverse_squares));
         check(close(stable_dt(c, 0.0, 0.0), expected, 1e-14), "without flow, the smallest of the other limits");

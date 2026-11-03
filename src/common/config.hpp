@@ -22,11 +22,11 @@ enum class Exchange { blocking, overlap };
 // Every member has a default value (written after "="), so  Config c;  is
 // already the configuration from config/defaults.json.
 struct Config {
-    // Grid and geometry: a 1 x 2 basin with square cells.
+    // Grid and geometry: a 1 x 1 basin with square cells.
     int nx = 256;
-    int ny = 512;
+    int ny = 256;
     double lx = 1.0;
-    double ly = 2.0;
+    double ly = 1.0;
     int steps = 50000;
 
     // Pigment and time stepping
@@ -36,12 +36,11 @@ struct Config {
     // "choose dt automatically from cfl and max_speed".
     std::optional<double> dt;
 
-    // Wind-driven flow (docs/design.md, "The wind-driven flow"). With
-    // nu = 1e-3 and F0 = 0.1 the flow reaches speeds of about 1 (Re about
-    // 1000) and settles into two gyres over a spin-up of about 100.
+    // Wind-driven flow (docs/design.md). F0 = 0.8 keeps the velocity scale
+    // F0 / (nu k^3) of the former 1 x 2 basin with F0 = 0.1.
     double viscosity = 1e-3;
     Wind wind = Wind::steady;
-    double wind_amplitude = 0.1;
+    double wind_amplitude = 0.8;
     double wind_alpha = 0.0;
     double wind_period = 1.0;
     double spinup = 100.0;  // flow-only time before the pigment is released
@@ -63,7 +62,7 @@ struct Config {
     double background = 0.0;
     double amplitude = 1.0;
     double blob_x = 0.2;
-    double blob_y = 1.0;
+    double blob_y = 0.5;
     double blob_width = 0.05;
 
     // Output: path of the final field (.csv, or .npy for large grids);

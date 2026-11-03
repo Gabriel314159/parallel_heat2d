@@ -2,9 +2,9 @@
   "schema_version": 5,
   "problem": {
     "nx": 256,
-    "ny": 512,
+    "ny": 256,
     "lx": 1.0,
-    "ly": 2.0,
+    "ly": 1.0,
     "steps": 50000,
     "kappa": 0.0001,
     "cfl": 0.8,
@@ -13,7 +13,7 @@
     "check_interval": 100,
     "viscosity": 0.001,
     "wind": "steady",
-    "wind_amplitude": 0.1,
+    "wind_amplitude": 0.8,
     "wind_alpha": 0.0,
     "wind_period": 1.0,
     "spinup": 100.0,
@@ -22,7 +22,7 @@
     "amplitude": 1.0,
     "blob_centre": [
       0.2,
-      1.0
+      0.5
     ],
     "blob_width": 0.05
   },
