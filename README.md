@@ -76,12 +76,13 @@ Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--
 | Mode | Purpose |
 | --- | --- |
 | `heat_serial` | Single-threaded reference implementation with no MPI dependency. |
+| `heat_serial_omp` | The same serial solver compiled with the OpenMP pragmas (as in `heat_parallel`) and always run on one thread; built when OpenMP is found. It gives the same field as `heat_serial`, and on the laptop it is about twice as fast, like `heat_parallel` on one rank (`docs/experiment_plan.md`, "Two serial references"). |
 | `heat_parallel --decomp rows` | MPI row decomposition; each rank owns a band of rows. |
 | `heat_parallel --decomp 2d` | Two-dimensional MPI process grid (`--py`, `--px`, or chosen automatically). |
-| `heat_parallel --exchange blocking` | Halo exchange with `MPI_Sendrecv`, then the update. |
+| `heat_parallel --exchange blocking` | Halo exchange with all messages posted at once and one wait, then the update. |
 | `heat_parallel --exchange overlap` | Nonblocking halo exchanges: the interior of the pigment update and of the CG's $Ap$ is computed while messages travel. |
 
-Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used, and on Linux the fewest cores any rank may run on (`cores_per_rank`); the solver warns when a rank has fewer cores than threads, which means the launcher bound it too tightly. If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
+Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used, and on Linux the fewest cores any rank may run on (`cores_per_rank`) and whether every thread is bound to a physical core of its own (`binding` is `cores`). The solver warns when a rank has fewer cores than threads, which means the launcher bound it too tightly, and when threads are not bound one to each core, for example two on the hardware threads of one core; see "Binding" in [hpc/README.md](hpc/README.md). If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
 
 ## Preview the dynamics
 
@@ -95,21 +96,21 @@ python3 scripts/animate_field.py outputs/preview --field vorticity -o outputs/vo
 python3 scripts/plot_field.py outputs/preview/field_025000.npy --flow streamlines --gamma 0.5
 ```
 
-With the defaults ($256 \times 512$ cells, $\nu = 10^{-3}$, $F_0 = 0.1$), the flow first spins up alone for 100 time units into two gyres with speeds of about 1; then the pigment is released on the line between them and followed for 50,000 steps (about 20 time units), with 101 snapshots. That is about 306,000 steps, each needing about 350 CG iterations for $\psi$. On an 8-core laptop with 4 ranks × 2 threads, a step takes about 0.08 s, so the whole run takes roughly 6–7 hours (estimated from the first 700 steps). Run it on a bigger machine, or use a coarser grid for a quick look (with `--nx 128 --ny 256`, each step is about 8× cheaper). Write `.mp4` instead of `.gif` for smoother colours (needs ffmpeg).
+With the defaults ($256 \times 256$ cells on the $1 \times 1$ basin, $\nu = 10^{-3}$, $F_0 = 0.8$), the flow first spins up alone for 100 time units into two gyres; then the pigment is released on the line between them and followed for 50,000 steps (about 20 time units), with 101 snapshots. That is about 306,000 steps. On the former $1 \times 2$ basin, with twice the cells and about 350 CG iterations per step, a step took about 0.08 s on an 8-core laptop with 4 ranks × 2 threads (6–7 hours in all); the square basin has half the cells and about 290 iterations per step from rest, so expect roughly half of that (not yet measured). $F_0 = 0.8$ is 8 times the former 0.1, which keeps the velocity scale $F_0/(\nu k^3)$ now that $k = 2\pi/l_y$ has doubled; the speeds of the spun-up flow have not yet been measured on the square basin. Run it on a bigger machine, or use a coarser grid for a quick look (with `--nx 128 --ny 128`, each step is about 8× cheaper). Write `.mp4` instead of `.gif` for smoother colours (needs ffmpeg).
 
 Every snapshot holds the pigment, $\psi$ and the vorticity, so `--field vorticity` and `--field psi` show the flow itself and `--flow streamlines` draws the streamlines of the same moment.
 
 ## Larger runs on a bigger machine
 
-Each step costs one pigment update, one vorticity update and one Poisson solve. The CG Poisson solve takes over 99% of the time (measured on $128 \times 256$ cells). The time step is set by the speed estimate, $\Delta t = 0.8 \times 0.5/(U_{\max}(1/\Delta x + 1/\Delta y))$, so it halves when the grid is refined. The CG iterations per step also double (about 180 on $128 \times 256$, 350 on $256 \times 512$), so the cost per time unit grows about 16× per doubling of the grid.
+Each step costs one pigment update, one vorticity update and one Poisson solve. The CG Poisson solve takes over 99% of the time (measured on $128 \times 256$ cells). The time step is set by the speed estimate, $\Delta t = 0.8 \times 0.5/(U_{\max}(1/\Delta x + 1/\Delta y))$, so it halves when the grid is refined. The CG iterations per step also nearly double (from rest on the $1 \times 1$ basin: about 290 on $256^2$, 540 on $512^2$, 840 on $1024^2$), so the cost per time unit grows about 16× per doubling of the grid.
 
-The physics also changes with the parameters. With the steady wind and these viscosities, the flow spins up over a viscous time of about $1/(\nu\,\pi^2(1/l_x^2 + 4/l_y^2))$ (25 at $\nu = 2\times10^{-3}$, 100 at $5\times10^{-4}$) into two steady gyres; in test runs up to $\mathrm{Re}$ of about 4000 the flow was still smooth after 100 time units. Use `--wind periodic` (for example `--wind-alpha 1.5 --wind-period 20`, which reverses the wind) for a strongly time-dependent flow.
+The physics also changes with the parameters. With the steady wind and these viscosities, the flow spins up over a viscous time of about $1/(\nu\,\pi^2(1/l_x^2 + 4/l_y^2))$ (10 at $\nu = 2\times10^{-3}$, 40 at $5\times10^{-4}$ on the $1 \times 1$ basin) into two steady gyres; in test runs on the former $1 \times 2$ basin, up to $\mathrm{Re}$ of about 4000, the flow was still smooth after 100 time units. Use `--wind periodic` (for example `--wind-alpha 1.5 --wind-period 20`, which reverses the wind) for a strongly time-dependent flow.
 
 [hpc/big_run.sh](hpc/big_run.sh) runs one large case with snapshots, serial or parallel; its settings come from environment variables:
 
 ```bash
 mkdir -p outputs
-# 512 x 1024 cells with the default flow, spin-up 100, then about 40 time units with the pigment
+# 512 x 512 cells with the default flow, spin-up 100, then about 40 time units with the pigment
 HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 ```
 

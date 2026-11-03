@@ -20,7 +20,7 @@ Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src`
 | `corners.hpp` | Corner fields ($\psi$, $\zeta$) stored in a `Field`: corner positions, the range of unknown corners of a block, and zeroing the ghost corners on the top and left walls. |
 | `flow.hpp`, `flow.cpp` | One row of the vorticity right-hand side $R = J(\psi,\zeta) + F + \nu\nabla^2\zeta$ (Arakawa Jacobian), the Adams–Bashforth weights and update, the wind profile and strength, the face velocities from $\psi$, and the energy and enstrophy sums. |
 | `poisson.hpp` | The conjugate gradient Poisson solver, matrix-free and warm-started. Header-only, so the parallel solver compiles its loops with OpenMP; the global sum and the halo exchange come in through a small `PoissonComm` interface (`SerialComm` for one process). With overlap, $Ap$ is computed on the inner corners while the exchange runs, and on the edge strips after it (`overlap_split`). |
-| `affinity.hpp` | The physical cores a process's threads may run on (the union of the OpenMP threads' affinity masks; Linux only, 0 elsewhere), for the binding check. Header-only, like `poisson.hpp`. |
+| `affinity.hpp` | For the binding check: the physical cores a process's threads may run on (the union of the OpenMP threads' affinity masks), the core each thread is bound to, and the binding of a node judged from those cores (`cores`, `unpinned`, `shared`). Linux only; unknown elsewhere. Header-only, like `poisson.hpp`. The parallel solver gathers the cores of a node's ranks (`binding_over_nodes` in `parallel/decomposition.cpp`). |
 | `velocity.hpp`, `velocity.cpp` | An analytic streamfunction (the former prescribed double gyre) and its per-face velocities, kept as a reference for the face-velocity tests. |
 | `physics.hpp`, `physics.cpp` | Initial conditions (`pigment_drop` Gaussian, `constant`, `cosine_decay`), the no-flux wall ghost fill, the analytic `cosine_decay` reference (continuous and exact-discrete), and the local mass sum $\Delta x\,\Delta y\sum c_{i,j}$. |
 | `stencil.hpp` | An inline upwind flux update of one pigment cell from its five cell values and its four face velocities; no communication or threading inside this function. |
@@ -68,7 +68,7 @@ The time step is fixed for the run. Every `check_interval` steps the largest fac
 
 ## Serial solver (`serial/`)
 
-Files: `main.cpp`, `solver.hpp`, `solver.cpp`. Run `heat_serial --help` for the options.
+Files: `main.cpp`, `solver.hpp`, `solver.cpp`. Run `heat_serial --help` for the options. The same files also build `heat_serial_omp`: the serial solver compiled with the OpenMP pragmas of the shared loops (as in `heat_parallel`) and always run on one thread, the second one-core reference of the experiments.
 
 The driver parses parameters, allocates the full domain with its ghost layer, the face-velocity arrays and the flow fields, spins the flow up from rest, releases the pigment, runs a fixed number of time steps, optionally writes the final field and snapshots, and reports the timings, the mass error and the flow diagnostics.
 
@@ -103,7 +103,7 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 4. Every step, fill each side of the local block in one of two ways:
    - **Internal edge** (a neighbouring rank exists): MPI halo exchange.
    - **Physical edge** (the side lies on a global wall): local ghost fill by the boundary rule, e.g. the no-flux mirror fill, ghost = adjacent interior cell. This is refilled every step, because it depends on the current interior.
-5. Implement blocking halo exchange using a deadlock-safe communication pattern such as `MPI_Sendrecv`.
+5. Implement blocking halo exchange using a deadlock-safe communication pattern: all receives and sends posted at once, then one `MPI_Waitall`.
 6. After the pigment update, advance the flow: exchange $\zeta$ with corners, compute the right-hand side and the Adams–Bashforth update on the local unknown corners, solve the Poisson equation with CG (one halo exchange and two `MPI_Allreduce` sums per iteration), exchange $\psi$ with corners, and compute the local face velocities. Both ranks next to a shared face compute it from the same $\psi$ values, so they agree exactly.
 7. Parallelize the pigment update, the vorticity rows, the face velocities and the CG loops with OpenMP, with one writer per destination value.
 8. Overlap: for the pigment, post receives and sends, fill the physical-wall ghosts, update the strict local interior, wait for all requests, then update the remaining local boundary cells exactly once. In every CG iteration, start the exchange of $p$, compute $Ap$ on the inner corners, wait, then compute the edge corners exactly once. The corner exchanges of $\psi$ and $\zeta$, once per step, stay blocking.

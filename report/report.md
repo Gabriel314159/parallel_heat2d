@@ -36,6 +36,8 @@ Identify Atlas or Vanda, CPU/node details, compiler and library versions, build 
 
 Insert measured figures and discuss the five experiments of `experiments/README.md`: serial vs MPI (strong scaling), serial vs OpenMP, pure MPI vs MPI + OpenMP, communication strategies and weak scaling. State the baseline for every speedup or efficiency plot. Keep raw-data references and uncertainty visible.
 
+For every experiment, discuss the scaling of the whole computation first, then of its dominant part, the Poisson solve: its share of the run time, the CG iterations per step, the time per CG iteration, and inside it the halo exchanges and global sums (`docs/experiment_plan.md`, "The whole computation and its dominant part"). Mention the other parts only if they become a sizeable share.
+
 ## 7. Discussion and limitations
 
 Explain observed bottlenecks using evidence. Discuss communication, local block sizes, memory bandwidth, threading, problem size and the limits of the experiments. Do not claim overlap is faster before measuring it.

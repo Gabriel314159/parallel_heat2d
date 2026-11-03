@@ -103,7 +103,7 @@ $$
 
 The Reynolds number $\mathrm{Re} = U l_x/\nu$ compares advection with viscosity. At small $\mathrm{Re}$ the flow settles into two steady gyres. At larger $\mathrm{Re}$ the jet between them becomes unstable, meanders and sheds eddies. This is the regime with the swirls that we are after.
 
-Finally, we choose the parameters. The default basin is $1 \times 2$ ($l_x = 1$, $l_y = 2$) with $256 \times 512$ cells, so $\Delta x = \Delta y$. We fix the velocity scale $U = 1$ and choose $\mathrm{Re}$; then
+Finally, we choose the parameters. The default basin is $1 \times 1$ ($l_x = l_y = 1$) with $256 \times 256$ cells, so $\Delta x = \Delta y$; each gyre then fills a $1 \times \tfrac12$ half of it. We fix the velocity scale $U = 1$ and choose $\mathrm{Re}$; then
 
 $$
 \nu = \frac{U l_x}{\mathrm{Re}},
@@ -348,15 +348,28 @@ $$
   with $\text{tol} = 10^{-10}$ by default (`--poisson-tol`). The run stops with an error if this takes more than `--poisson-max-iter` iterations.
 - If $\zeta = 0$ everywhere, the solution is $\psi = 0$ and no iteration is needed.
 
-Each iteration needs one halo exchange (for $A p_k$, which reads the four nearest neighbours) and two global sums (the dot products $p_k\cdot Ap_k$ and $r_{k+1}\cdot r_{k+1}$). The solver itself contains no MPI: the global sum and the halo exchange are passed in, so that the serial and parallel solvers share one implementation.
+The solve itself does not exchange $\psi$: its halos already hold the neighbours' values, because $\psi$ is exchanged (with its corners) after every solve. Each iteration needs one halo exchange (for $A p_k$, which reads the four nearest neighbours) and two global sums (the dot products $p_k\cdot Ap_k$ and $r_{k+1}\cdot r_{k+1}$). The solver itself contains no MPI: the global sum and the halo exchange are passed in, so that the serial and parallel solvers share one implementation.
 
 With `--exchange overlap`, the halo exchange of $p_k$ overlaps with the work on $Ap_k$ (see "Halo exchange"). The global sums cannot overlap: $\alpha_k$ needs $p_k\cdot Ap_k$ before $\psi$ and $r$ can be updated, and the stopping test and $\beta_k$ need $r_{k+1}\cdot r_{k+1}$ before the next iteration can start.
 
-The cost is the price of this simplicity. The number of iterations grows with the grid: a step of the default flow needs about 180 iterations on $128 \times 256$ cells and about 350 on $256 \times 512$, and the Poisson solve takes over 99% of the run time. A preconditioner, such as multigrid, would reduce the iterations and is left for later.
+The cost is the price of this simplicity. The number of iterations grows with the grid: on the $1 \times 1$ basin, a step of the flow starting from rest needs about 290 iterations on $256 \times 256$ cells, 540 on $512 \times 512$ and 840 on $1024 \times 1024$ (laptop, first 10 steps), and the Poisson solve takes over 99% of the run time. A preconditioner, such as multigrid, would reduce the iterations and is left for later.
 
 The global sums add the rank contributions in a different order in parallel, so the serial and parallel solutions differ at the level of rounding and of the tolerance, not bit for bit. Overlap changes the order once more, because $p_k\cdot Ap_k$ is summed over the inner corners first. Blocking and overlapping runs therefore also differ at the level of rounding, and a solve may take one iteration more or fewer.
 
 Finally, the face velocities are computed from $\psi^{n+1}$ with the formulas in "Velocity on faces".
+
+### The Poisson solve on a GPU
+
+A GPU build of `heat_parallel` (CMake option `HEAT2D_OFFLOAD`) runs the CG on GPUs with OpenMP target offload; the rest of each step stays on the CPU threads of the rank.
+
+1. **One GPU per rank.** The ranks of a node take its GPUs in turn: rank $q$ of the node uses GPU $q \bmod n_{\text{GPU}}$.
+2. **The work fields stay on the GPU.** $r$, $p$ and $Ap$ are allocated there once, for the whole run. Each solve copies $\zeta$ and the initial $\psi$ to the GPU and the solution $\psi$ back: three fields per step, against hundreds of iterations on the GPU.
+3. **The loops.** The three loops of an iteration, and the first one, become `omp target teams distribute parallel for` over both directions, with `reduction(+ : …)` for the dot products. The two global sums stay on the host; each needs one number from the GPU.
+4. **The halo exchange.** The GPU packs the block's edge values ($2(n_x+n_y)$ numbers) into a buffer, which is copied to the host and written into the host copy of $p$. The host exchanges it with the usual `HaloExchange`, and the received ghost values go back the same way. A rank whose block borders no other rank (one rank) copies nothing during the iterations.
+5. **Only blocking.** The GPU build rejects `--exchange overlap`.
+6. **Reported.** `poisson_device` says where the loops ran (`gpu`, or `host (no GPU found)`), and `poisson_copy_s` is the time of the copies between host and GPU.
+
+The reductions over both directions add in a different order than the CPU loops, so the GPU result differs from the serial one at the level of rounding. Built with `HEAT2D_OFFLOAD_FLAGS` empty, the same code runs every target region on the host, which tests this code path without a GPU.
 
 ### One time step
 
@@ -537,7 +550,7 @@ Rows are contiguous in row-major storage, so a halo row is sent straight from th
 
 Upwinding and the five-point diffusion term use only the four nearest neighbours, so a one-cell halo is sufficient.
 
-The blocking baseline can use `MPI_Sendrecv` with consistent partners and tags. It must not rely on eager buffering to avoid deadlock. Sides on a physical wall have no rank neighbour; fill those ghosts by the boundary rule instead.
+The blocking exchange posts all receives and sends at once (`MPI_Irecv`, `MPI_Isend`) and waits for all of them with one `MPI_Waitall`, so the messages to the four neighbours travel together: about one message latency instead of four for four `MPI_Sendrecv` calls one after another. The overlapping exchange posts the same messages; it differs only in the work done before the wait. Neither relies on eager buffering. Sides on a physical wall have no rank neighbour; fill those ghosts by the boundary rule instead.
 
 For overlap:
 
@@ -595,9 +608,20 @@ The same number of ranks performs differently on one node and on several. We cou
 
 ### Binding check
 
-The launcher decides on which cores a rank may run. If a rank may use fewer cores than it has threads, the threads share cores, and the timings no longer measure one thread per core. This happens with the default settings of some launchers: Open MPI binds each rank to a single core when it starts two ranks or fewer, and Slurm's `srun` allocates one CPU per rank unless told otherwise (`--cpus-per-task`), to which many clusters confine the rank.
+The launcher decides on which cores a rank may run, and the OpenMP runtime decides on which of them each thread runs. We want one thread on each physical core. Two threads on one core, for example on its two hardware threads (SMT, or hyper-threading), share its arithmetic units and caches, and the timings no longer measure one thread per core.
 
-So each rank counts the physical cores its threads may run on. It asks every OpenMP thread for its affinity mask, takes their union, and counts the hardware threads of one core once (from the CPU topology that Linux reports). We record the smallest count over the ranks, and warn when it is below the number of threads per rank. The run goes on, so that the run report shows what happened. Where the system does not report the masks (macOS), the count is 0, for unknown.
+This goes wrong with the default settings of some launchers. Open MPI binds each rank to a single core when it starts two ranks or fewer, and Slurm's `srun` allocates one CPU per rank unless told otherwise (`--cpus-per-task`), to which many clusters confine the rank. Where the scheduler counts hardware threads as CPUs, two single-thread ranks may also land on the two hardware threads of one core.
+
+So every run checks the binding in two ways. Both read the affinity mask of every OpenMP thread, and both count the hardware threads of one core as one core (from the CPU topology that Linux reports).
+
+1. **Cores per rank.** Each rank takes the union of its threads' masks and counts the physical cores in it. We record the smallest count over the ranks (`cores_per_rank`).
+2. **One thread per core.** Each thread's mask must lie within one physical core, and no two threads on a node may be bound to the same core. The ranks of a node gather the cores of their threads, so that two ranks bound to one core are found too. We record the result as `binding`:
+   - `cores`: every thread is bound to a physical core of its own;
+   - `unpinned`: some thread may run on more than one core, so the operating system decides where it runs;
+   - `shared`: two threads on one node are bound to the same core;
+   - `unknown`: the system does not report the masks (macOS).
+
+`heat_parallel` warns when a rank has fewer cores than threads, or when the binding is not `cores`. The run goes on, so that the run report shows what happened; only runs with the binding `cores` count as timings. Where the system does not report the masks, the core count is 0, for unknown. The settings that give one thread per core are in `hpc/README.md`, "Binding".
 
 ## Diagnostics
 
