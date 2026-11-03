@@ -85,12 +85,14 @@ cmake --build build-gpu -j
 
 ```bash
 qsub -q auto_free hpc/jobs/exp0_correctness.pbs
-qsub -q batch_cpu -P <project> hpc/jobs/exp1_one_node.pbs
-qsub -q batch_cpu -P <project> hpc/jobs/exp2_openmp.pbs
-qsub -q batch_cpu -P <project> hpc/jobs/exp5_one_node.pbs
-qsub -q batch_cpu -P <project> hpc/jobs/four_nodes.pbs
-qsub -q batch_gpu -P <project> hpc/jobs/exp3_gpu.pbs
+qsub -P <project> hpc/jobs/exp1_one_node.pbs
+qsub -P <project> hpc/jobs/exp2_openmp.pbs
+qsub -P <project> hpc/jobs/exp5_one_node.pbs
+qsub -P <project> hpc/jobs/four_nodes.pbs
+qsub -P <project> hpc/jobs/exp3_gpu.pbs
 ```
+
+With `-P` and no `-q`, the default queue `auto` routes a job to `batch_cpu` or `batch_gpu`, which accept jobs only from it.
 
 `four_nodes.pbs` runs everything above one node (experiments 1 and 5 at 128 and 256 ranks, 3 and 4); `exp3_gpu.pbs` builds the GPU version. A failed run is recorded and the runner goes on with the next configuration; each run's launcher output, with `--report-bindings`, is in `outputs/<experiment>/<session>/`. Do not change the checkout on Vanda while jobs are queued: each job builds what is there when it starts.
 
