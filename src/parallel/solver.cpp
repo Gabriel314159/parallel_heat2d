@@ -269,6 +269,24 @@ void check_same_threads(int threads, MPI_Comm comm) {
     if (lowest != highest) throw std::runtime_error("all ranks must use the same number of threads");
 }
 
+// The timings count one thread per physical core. Warn when a rank has fewer
+// cores than threads, or when the threads are not bound one to each core.
+void warn_about_binding(int cores, Binding binding, int threads) {
+    std::string problem;
+    if (cores > 0 && cores < threads) {
+        problem = "a rank may run on only " + std::to_string(cores) + (cores == 1 ? " core" : " cores") + " for its " +
+                  std::to_string(threads) + " threads, so threads share cores";
+    } else if (binding == Binding::shared) {
+        problem = "two threads are bound to the same physical core (for example its two hardware threads)";
+    } else if (binding == Binding::unpinned) {
+        problem = "some threads are not bound to a single core, so the operating system decides where they run";
+    } else {
+        return;
+    }
+    std::cerr << "heat_parallel: warning: " << problem << ". Bind one thread to each physical core "
+              << "(hpc/README.md, \"Binding\").\n";
+}
+
 std::string mpi_library() {
     char version[MPI_MAX_LIBRARY_VERSION_STRING];
     int length = 0;
@@ -310,14 +328,12 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     check_same_threads(threads, layout.comm);
     const int nodes = count_nodes(layout);
 
-    // Threads that share a core make the timings meaningless per core: warn,
-    // but run, so that the run report shows what happened.
+    // Threads that share a core, or that the operating system may move from
+    // core to core, make the timings meaningless per core: warn, but run, so
+    // that the run report shows what happened.
     const int cores = min_over_ranks(allowed_cores(), layout.comm);
-    if (layout.rank == 0 && cores > 0 && cores < threads) {
-        std::cerr << "heat_parallel: warning: a rank may run on only " << cores << (cores == 1 ? " core" : " cores")
-                  << " for its " << threads << " threads, so threads share cores. Check how the launcher binds "
-                  << "ranks to cores (hpc/README.md).\n";
-    }
+    const Binding binding = binding_over_nodes(layout, thread_cores());
+    if (layout.rank == 0) warn_about_binding(cores, binding, threads);
 
     const double dx = cfg.lx / cfg.nx;
     const double dy = cfg.ly / cfg.ny;
@@ -466,6 +482,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     s.omp_threads = threads;
     s.nodes = nodes;
     s.cores_per_rank = cores;
+    s.binding = binding_name(binding);
     s.py = layout.py;
     s.px = layout.px;
     s.decomposition = decomp_name(cfg.decomposition);

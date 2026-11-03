@@ -8,7 +8,9 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
+#include "common/affinity.hpp"
 #include "common/config.hpp"
 #include "common/grid.hpp"
 
@@ -60,6 +62,14 @@ ProcessLayout make_layout(const Config& c, MPI_Comm world);
 // The number of nodes the ranks of a layout run on: ranks that can share
 // memory (MPI_COMM_TYPE_SHARED) form one node. Collective.
 int count_nodes(const ProcessLayout& layout);
+
+// How the threads of all ranks are bound to physical cores. `cores` is the
+// core of each thread of this rank (thread_cores in common/affinity.hpp); all
+// ranks must have the same number of threads. The ranks of each node gather
+// the cores of their threads, so that two threads of different ranks bound to
+// one core are found too; the result is the worst binding over the nodes, and
+// unknown if any rank cannot tell. Collective.
+Binding binding_over_nodes(const ProcessLayout& layout, const std::vector<int>& cores);
 
 // Frees the communicator of a layout when it goes out of scope.
 class LayoutGuard {

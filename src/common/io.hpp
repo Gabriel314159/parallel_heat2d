@@ -34,6 +34,9 @@ struct RunSummary {
     int omp_threads = 1;      // threads per rank actually in use
     int nodes = 1;            // nodes the ranks run on
     int cores_per_rank = 0;   // physical cores a rank's threads may run on, fewest over ranks; 0 if unknown
+    // How the threads are bound to physical cores: "cores" (one thread on each
+    // core), "unpinned", "shared" or "unknown" (common/affinity.hpp).
+    std::string binding = "unknown";
     int py = 1;
     int px = 1;
     std::string decomposition = "none";

@@ -3,7 +3,8 @@
 // encoding its global position; after an exchange, every ghost cell next to
 // another rank must hold the value of the cell it mirrors. The layout must
 // keep the world ranks (no reordering), return MPI errors instead of aborting,
-// and count the nodes. The CG Poisson solver, with blocking and with
+// and count the nodes. The binding check must find two threads, of one rank or
+// of two, bound to the same core. The CG Poisson solver, with blocking and with
 // overlapping exchange, must give the serial solution. Run by CTest on several
 // rank counts.
 
@@ -15,6 +16,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "common/config.hpp"
 #include "common/corners.hpp"
@@ -179,6 +181,39 @@ int main(int argc, char** argv) {
                 std::cout << (total[k] == 0 ? "  ok    " : "  FAIL  ") << name << ": " << labels[k] << " ("
                           << total[k] << " wrong ghost cells)\n";
                 failures += total[k] != 0;
+            }
+        }
+    }
+
+    // The binding check, on made-up cores for the threads of each rank: the
+    // ranks of a node must see each other's cores, so that two ranks bound to
+    // one core are found.
+    {
+        Config c;
+        ProcessLayout layout = make_layout(c, MPI_COMM_WORLD);
+        const LayoutGuard guard(layout);
+        const int nodes = count_nodes(layout);
+        const int r = layout.rank;
+        struct Case {
+            const char* label;
+            std::vector<int> cores;
+            Binding expected;
+        };
+        const Case cases[] = {
+            {"one thread per rank, each on a core of its own", {r}, Binding::cores},
+            {"one thread per rank, all on core 0", {0}, nodes < layout.size ? Binding::shared : Binding::cores},
+            {"the thread of rank 0 free to run on several cores", {r == 0 ? -1 : r}, Binding::unpinned},
+            {"two threads per rank on two cores", {2 * r, 2 * r + 1}, Binding::cores},
+            {"two threads per rank on one core", {2 * r, 2 * r}, Binding::shared},
+            {"no cores reported", {}, Binding::unknown},
+        };
+        for (const Case& test : cases) {
+            const Binding found = binding_over_nodes(layout, test.cores);
+            if (rank == 0) {
+                const bool ok = found == test.expected;
+                std::cout << (ok ? "  ok    " : "  FAIL  ") << "binding check, " << test.label << ": "
+                          << binding_name(found) << "\n";
+                failures += !ok;
             }
         }
     }

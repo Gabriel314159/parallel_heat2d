@@ -188,6 +188,7 @@ SerialResult run_serial(const Config& cfg) {
     s.elapsed_s = loop_seconds;
     s.spinup_s = spinup_seconds;
     s.cores_per_rank = allowed_cores();
+    s.binding = binding_name(node_binding(thread_cores()));
     s.poisson_s = poisson_seconds;
     s.poisson_iterations = poisson_iterations;
     s.poisson_iterations_max = poisson_iterations_max;

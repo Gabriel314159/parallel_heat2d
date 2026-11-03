@@ -122,6 +122,7 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("omp_threads", s.omp_threads);
     json.add("nodes", s.nodes);
     json.add("cores_per_rank", s.cores_per_rank);
+    json.add("binding", s.binding);
     json.add("decomposition", s.decomposition);
     json.add("exchange", s.exchange);
     json.add("py", s.py);
@@ -165,8 +166,8 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
         out << "\n  parallel: " << s.mpi_ranks << " ranks x " << s.omp_threads << " threads on " << s.nodes
             << (s.nodes == 1 ? " node, " : " nodes, ");
         if (s.cores_per_rank > 0) out << "at least " << s.cores_per_rank << " cores per rank, ";
-        out << s.py << " x " << s.px << " process grid, " << s.decomposition << " decomposition, " << s.exchange
-            << " exchange";
+        out << "binding " << s.binding << ", " << s.py << " x " << s.px << " process grid, " << s.decomposition
+            << " decomposition, " << s.exchange << " exchange";
     }
     out << "\n  largest measured speeds: u = " << s.u_max_measured << ", v = " << s.v_max_measured
         << " (estimate --max-speed " << c.max_speed << ")\n"

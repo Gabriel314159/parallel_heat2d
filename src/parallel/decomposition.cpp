@@ -85,3 +85,28 @@ int count_nodes(const ProcessLayout& layout) {
     MPI_Comm_free(&shared);
     return nodes;
 }
+
+Binding binding_over_nodes(const ProcessLayout& layout, const std::vector<int>& cores) {
+    const int known = cores.empty() ? 0 : 1;
+    int all_known = 0;
+    mpi_check(MPI_Allreduce(&known, &all_known, 1, MPI_INT, MPI_MIN, layout.comm), "binding check");
+    if (all_known == 0) return Binding::unknown;
+
+    // The cores of all threads of this node, from all its ranks.
+    MPI_Comm shared = MPI_COMM_NULL;
+    mpi_check(MPI_Comm_split_type(layout.comm, MPI_COMM_TYPE_SHARED, layout.rank, MPI_INFO_NULL, &shared),
+              "shared-memory communicator");
+    int node_ranks = 0;
+    mpi_check(MPI_Comm_size(shared, &node_ranks), "MPI_Comm_size (shared-memory communicator)");
+    const int threads = static_cast<int>(cores.size());
+    std::vector<int> node(static_cast<std::size_t>(node_ranks) * cores.size());
+    mpi_check(MPI_Allgather(cores.data(), threads, MPI_INT, node.data(), threads, MPI_INT, shared),
+              "binding check (cores of the node)");
+    MPI_Comm_free(&shared);
+
+    // Binding runs from best to worst, so the worst node has the largest value.
+    const int mine = static_cast<int>(node_binding(node));
+    int worst = 0;
+    mpi_check(MPI_Allreduce(&mine, &worst, 1, MPI_INT, MPI_MAX, layout.comm), "binding check");
+    return static_cast<Binding>(worst);
+}

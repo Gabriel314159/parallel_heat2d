@@ -9,7 +9,9 @@ set -euo pipefail
 
 cd "$HEAT2D_REPO"
 
-# Replace the empty array with the verified launcher. Example syntax varies by platform.
+# Replace the empty array with the verified launcher. Example syntax varies by
+# platform. It must give every rank OMP_NUM_THREADS whole physical cores and
+# bind the rank to them (hpc/README.md, "Binding").
 MPI_LAUNCH_ARGS=()
 if [[ ${#MPI_LAUNCH_ARGS[@]} -eq 0 ]]; then
     echo "Configure MPI_LAUNCH_ARGS and scheduler resources before using this template." >&2
@@ -22,6 +24,10 @@ if [[ ! -x ./build/heat_parallel ]]; then
 fi
 
 export OMP_NUM_THREADS
+# One thread per physical core: each OpenMP place is one core, and the threads
+# of a rank fill neighbouring cores. Check "binding": "cores" in the RESULT line.
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
 mkdir -p logs
 
 # Example values only: choose the grid and steps from experiments/*.json.
