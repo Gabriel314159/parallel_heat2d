@@ -7,6 +7,13 @@
 #include "common/config.hpp"
 #include "common/io.hpp"
 
+// The name the program reports (heat_serial_omp: see CMakeLists.txt).
+#ifdef HEAT2D_SERIAL_OMP
+inline constexpr const char* serial_solver_name = "heat_serial_omp";
+#else
+inline constexpr const char* serial_solver_name = "heat_serial";
+#endif
+
 struct SerialResult {
     RunSummary summary;
     std::vector<double> field;  // final interior field, ny x nx, row by row

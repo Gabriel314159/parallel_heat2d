@@ -141,7 +141,7 @@ SerialResult run_serial(const Config& cfg) {
 
     std::optional<SnapshotWriter> snapshots;
     if (cfg.snapshot_interval > 0) {
-        snapshots.emplace(cfg, dt, spinup * dt, "heat_serial");
+        snapshots.emplace(cfg, dt, spinup * dt, serial_solver_name);
         snapshots->write(snapshot(0));
     }
 
@@ -180,7 +180,7 @@ SerialResult run_serial(const Config& cfg) {
 
     SerialResult result;
     RunSummary& s = result.summary;
-    s.solver = "heat_serial";
+    s.solver = serial_solver_name;
     s.dt = dt;
     s.spinup_steps = spinup;
     s.t_release = spinup * dt;

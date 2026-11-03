@@ -9,6 +9,8 @@ For every run, the serial solver is run on the resolved problem and checked
     (cosine_decay_discrete_rtol); the error against the continuous solution is
     reported separately, as discretization error.
 
+If heat_serial_omp is built, its field is compared with the serial one too.
+
 Each run also names a parallel configuration. Once heat_parallel is built,
 its final field is compared cell by cell with the serial one
 (serial_parallel_atol / serial_parallel_rtol). Until then those comparisons
@@ -130,6 +132,20 @@ def main() -> int:
                 results.append(("cosine vs exact discrete", error <= tol, f"{error:.2e} (tolerance {tol:.0e})"))
                 results.append(("cosine vs continuous", None,
                                 f"{summary['cosine_continuous_error']:.2e} (discretization error, reported only)"))
+
+            # heat_serial_omp, the second one-core reference, must give the serial field.
+            serial_omp = Path(args.build_dir) / "heat_serial_omp"
+            if serial_omp.is_file():
+                omp_csv = out_dir / f"{name}_serial_omp.csv"
+                try:
+                    run_solver([str(serial_omp), *problem_args(problem), "--output", str(omp_csv)])
+                    worst, within = max_field_difference(read_field_csv(omp_csv), read_field_csv(serial_csv),
+                                                         checks["serial_parallel_atol"], checks["serial_parallel_rtol"])
+                    results.append(("heat_serial_omp vs serial", within, f"max |difference| = {worst:.2e}"))
+                except (RuntimeError, ValueError) as error:
+                    results.append(("heat_serial_omp run", False, str(error)))
+            else:
+                results.append(("heat_serial_omp vs serial", None, "skipped: heat_serial_omp is not built"))
 
             execution = run["execution"]
             if execution.get("backend") == "parallel" and not args.serial_only:

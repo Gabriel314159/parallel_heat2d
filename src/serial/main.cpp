@@ -1,27 +1,39 @@
 // heat_serial: parse the command line, run the serial solver, report and
 // write the requested output. Run  heat_serial --help  for the options.
+// Also builds heat_serial_omp (HEAT2D_SERIAL_OMP), always on one thread.
 
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+
+#ifdef HEAT2D_SERIAL_OMP
+#include <omp.h>
+#endif
 
 #include "common/config.hpp"
 #include "common/io.hpp"
 #include "serial/solver.hpp"
 
 int main(int argc, char** argv) {
+    const std::string name = serial_solver_name;
+#ifdef HEAT2D_SERIAL_OMP
+    // One thread, whatever OMP_NUM_THREADS says.
+    omp_set_dynamic(0);
+    omp_set_num_threads(1);
+#endif
     if (wants_help(argc, argv)) {
-        std::cout << usage("heat_serial");
+        std::cout << usage(name);
         return 0;
     }
     try {
         const Config cfg = parse_args(argc, argv);
         validate(cfg);
         if (cfg.threads && *cfg.threads > 1) {
-            throw std::invalid_argument("heat_serial always uses one thread");
+            throw std::invalid_argument(name + " always uses one thread");
         }
         if (has_parallel_options(cfg)) {
-            std::cerr << "heat_serial: note: --decomp, --exchange, --py and --px are ignored (heat_parallel only)\n";
+            std::cerr << name << ": note: --decomp, --exchange, --py and --px are ignored (heat_parallel only)\n";
         }
 
         const SerialResult result = run_serial(cfg);
@@ -33,8 +45,8 @@ int main(int argc, char** argv) {
         }
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "heat_serial: error: " << e.what() << "\n"
-                  << "Run heat_serial --help for the options.\n";
+        std::cerr << name << ": error: " << e.what() << "\n"
+                  << "Run " << name << " --help for the options.\n";
         return 2;
     }
 }

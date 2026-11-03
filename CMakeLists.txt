@@ -37,6 +37,28 @@ target_link_libraries(heat_serial PRIVATE heat2d_common)
 
 set(HEAT2D_TARGETS heat2d_common heat_serial)
 
+if(HEAT2D_ENABLE_OPENMP)
+    # Apple's clang has no OpenMP runtime of its own; use Homebrew's libomp if present.
+    if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND NOT OpenMP_CXX_FLAGS)
+        execute_process(COMMAND brew --prefix libomp OUTPUT_VARIABLE HEAT2D_LIBOMP
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(HEAT2D_LIBOMP AND EXISTS "${HEAT2D_LIBOMP}/include/omp.h")
+            set(OpenMP_CXX_FLAGS "-Xclang -fopenmp -I${HEAT2D_LIBOMP}/include" CACHE STRING "" FORCE)
+            set(OpenMP_CXX_LIB_NAMES "omp" CACHE STRING "" FORCE)
+            set(OpenMP_omp_LIBRARY "${HEAT2D_LIBOMP}/lib/libomp.dylib" CACHE FILEPATH "" FORCE)
+        endif()
+    endif()
+    find_package(OpenMP COMPONENTS CXX)
+endif()
+
+# heat_serial_omp: the serial solver with the OpenMP pragmas, on one thread.
+if(HEAT2D_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+    add_executable(heat_serial_omp src/serial/main.cpp src/serial/solver.cpp)
+    target_link_libraries(heat_serial_omp PRIVATE heat2d_common OpenMP::OpenMP_CXX)
+    target_compile_definitions(heat_serial_omp PRIVATE HEAT2D_USE_OPENMP=1 HEAT2D_SERIAL_OMP=1)
+    list(APPEND HEAT2D_TARGETS heat_serial_omp)
+endif()
+
 # Parallel solver (src/parallel): configured only when its sources exist.
 set(HEAT2D_PARALLEL_SOURCES
     src/parallel/main.cpp
@@ -65,17 +87,6 @@ elseif(HEAT2D_ENABLE_MPI AND HEAT2D_PARALLEL_READY)
     target_link_libraries(heat_parallel PRIVATE heat2d_common MPI::MPI_CXX)
 
     if(HEAT2D_ENABLE_OPENMP)
-        # Apple's clang has no OpenMP runtime of its own; use Homebrew's libomp if present.
-        if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND NOT OpenMP_CXX_FLAGS)
-            execute_process(COMMAND brew --prefix libomp OUTPUT_VARIABLE HEAT2D_LIBOMP
-                            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-            if(HEAT2D_LIBOMP AND EXISTS "${HEAT2D_LIBOMP}/include/omp.h")
-                set(OpenMP_CXX_FLAGS "-Xclang -fopenmp -I${HEAT2D_LIBOMP}/include" CACHE STRING "" FORCE)
-                set(OpenMP_CXX_LIB_NAMES "omp" CACHE STRING "" FORCE)
-                set(OpenMP_omp_LIBRARY "${HEAT2D_LIBOMP}/lib/libomp.dylib" CACHE FILEPATH "" FORCE)
-            endif()
-        endif()
-        find_package(OpenMP COMPONENTS CXX)
         if(OpenMP_CXX_FOUND)
             target_link_libraries(heat_parallel PRIVATE OpenMP::OpenMP_CXX)
             target_compile_definitions(heat_parallel PRIVATE HEAT2D_USE_OPENMP=1)
