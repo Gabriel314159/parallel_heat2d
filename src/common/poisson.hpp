@@ -86,11 +86,11 @@ public:
 
     // Solve A psi = zeta. On entry psi holds the initial guess (the previous
     // step's psi: a warm start); on return, the solution. The wall corners and
-    // wall ghosts of psi must be 0. Throws std::runtime_error when the
-    // tolerance is not reached within max_iterations.
+    // wall ghosts of psi must be 0 and its process halos current (psi is not
+    // exchanged here). Throws std::runtime_error when the tolerance is not
+    // reached within max_iterations.
     CgStats solve(const Field& zeta, Field& psi, const PoissonComm& comm) {
         const CornerRange u = unknown_;
-        comm.exchange(psi);
 
         // r = zeta - A psi, p = r; and the squared norms of r and zeta.
         double sums[2] = {0.0, 0.0};

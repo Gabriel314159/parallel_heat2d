@@ -62,23 +62,10 @@ void HaloExchange::unpack_columns(Field& c) {
     }
 }
 
+// All eight messages travel at once; nothing is computed before the wait.
 void HaloExchange::exchange(Field& c) {
-    const int count = halo * ny_;
-    // My top rows go north; my bottom ghost rows come from the south. Then the reverse.
-    mpi_check(MPI_Sendrecv(&c(1, 1), 1, rows_, north_, moving_north, &c(ny_ + 1, 1), 1, rows_, south_, moving_north,
-                           comm_, MPI_STATUS_IGNORE),
-              "halo north/south");
-    mpi_check(MPI_Sendrecv(&c(ny_ - halo + 1, 1), 1, rows_, south_, moving_south, &c(1 - halo, 1), 1, rows_, north_,
-                           moving_south, comm_, MPI_STATUS_IGNORE),
-              "halo south/north");
-    pack_columns(c);
-    mpi_check(MPI_Sendrecv(send_west_.data(), count, MPI_DOUBLE, west_, moving_west, recv_east_.data(), count,
-                           MPI_DOUBLE, east_, moving_west, comm_, MPI_STATUS_IGNORE),
-              "halo west/east");
-    mpi_check(MPI_Sendrecv(send_east_.data(), count, MPI_DOUBLE, east_, moving_east, recv_west_.data(), count,
-                           MPI_DOUBLE, west_, moving_east, comm_, MPI_STATUS_IGNORE),
-              "halo east/west");
-    unpack_columns(c);
+    start(c);
+    finish(c);
 }
 
 void HaloExchange::start(Field& c) {

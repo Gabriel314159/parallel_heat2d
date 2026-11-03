@@ -26,8 +26,8 @@ public:
     HaloExchange(const HaloExchange&) = delete;
     HaloExchange& operator=(const HaloExchange&) = delete;
 
-    // Blocking: MPI_Sendrecv in each direction. On return, every process
-    // halo of `c` holds its neighbour's values.
+    // Blocking: start() then finish(). On return, every process halo of `c`
+    // holds its neighbour's values.
     void exchange(Field& c);
 
     // Nonblocking: post all receives, pack the columns and post all sends.
