@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_exp3_gpu
+#PBS -l select=1:ncpus=72:ngpus=2:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+# Experiment 3 on GPUs: one rank per A40 and socket (hpc/README.md, "GPU build").
+
+cd "$PBS_O_WORKDIR" || exit 1
+module purge
+module load nvhpc-hpcx-cuda12/26.1 CMake/4.0.3-GCCcore-14.3.0
+export OMP_PLACES=cores OMP_PROC_BIND=close
+nvidia-smi --query-gpu=index,name,pci.bus_id,compute_mode --format=csv
+nvidia-smi topo -m
+
+BUILD="build-gpu-$PBS_JOBNAME-${PBS_JOBID%%.*}"
+cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=nvc++ -DHEAT2D_OFFLOAD=ON \
+    -DHEAT2D_BUILD_TESTS=OFF > "$BUILD.log" 2>&1 && cmake --build "$BUILD" -j 32 >> "$BUILD.log" 2>&1 ||
+    { echo "build failed, see $BUILD.log"; exit 1; }
+
+# Correctness gate, blocking only: no timings unless it passes.
+(unset OMP_PLACES OMP_PROC_BIND
+ python3 scripts/check_correctness.py --build-dir "$BUILD" --exchange blocking --require-gpu --output-dir "outputs/gate_$PBS_JOBID" \
+     --launcher "mpirun --oversubscribe --bind-to none -n {ranks}") > "$BUILD.gate.log" 2>&1 ||
+    { echo "correctness gate failed, see $BUILD.gate.log"; exit 1; }
+tail -1 "$BUILD.gate.log"
+
+python3 scripts/run_benchmarks.py --config experiments/hybrid_gpu.json --build-dir "$BUILD" --launcher mpirun \
+    --require-binding --require-gpu --allocated-cores 72 --timeout 900 --mpi-arg=--report-bindings \
+    --mpi-arg=-x --mpi-arg=OMP_PLACES --mpi-arg=-x --mpi-arg=OMP_PROC_BIND \
+    --mpi-arg=--map-by --mpi-arg=ppr:1:socket:PE=36 --mpi-arg=--bind-to --mpi-arg=core

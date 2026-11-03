@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_4nodes
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=03:00:00
+#PBS -j oe
+# Multi-node runs: experiments 1 (128, 256 ranks), 3 (CPU), 4 and 5 (256 ranks).
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+run --config experiments/strong_scaling_mpi.json --metrics-csv results/raw/strong_scaling_mpi_4nodes.csv \
+    "${SOCKET[@]}" --run p128_t1_2d_blocking --run p256_t1_2d_blocking
+run --config experiments/communication.json "${SOCKET[@]}"
+run --config experiments/hybrid_layouts.json "${SOCKET[@]}" --run p256_t1_2d_blocking --run p128_t2_2d_blocking \
+    --run p64_t4_2d_blocking --run p32_t8_2d_blocking --run p16_t16_2d_blocking --run p8_t32_2d_blocking
+export OMP_PLACES="{0}:32:2,{1}:32:2"
+run --config experiments/hybrid_layouts.json "${NODE[@]}" --run p4_t64_2d_blocking
+export OMP_PLACES=cores
+run --config experiments/weak_scaling.json --metrics-csv results/raw/weak_scaling_4nodes.csv \
+    "${SOCKET[@]}" --run p256_t1_2d_blocking

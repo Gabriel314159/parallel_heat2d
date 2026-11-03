@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_exp1_1node
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=08:00:00
+#PBS -j oe
+# Experiment 1 on one node: the serial references and 1 to 64 ranks.
+
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+CSV=(--metrics-csv results/raw/strong_scaling_mpi_1node.csv)
+run --config experiments/strong_scaling_mpi.json "${CSV[@]}" "${CORE[@]}" \
+    --run serial_reference --run serial_omp_reference --run p1_t1_2d_blocking --run p2_t1_2d_blocking \
+    --run p4_t1_2d_blocking --run p8_t1_2d_blocking --run p16_t1_2d_blocking --run p32_t1_2d_blocking
+run --config experiments/strong_scaling_mpi.json "${CSV[@]}" "${SOCKET[@]}" --run p64_t1_2d_blocking

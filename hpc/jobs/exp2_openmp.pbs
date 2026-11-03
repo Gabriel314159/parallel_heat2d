@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_exp2
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=08:00:00
+#PBS -j oe
+# Experiment 2: the serial references, then one rank on the node, socket 0 first.
+
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+run --config experiments/strong_scaling_openmp.json "${CORE[@]}" --run serial_reference --run serial_omp_reference
+export OMP_PLACES="{0}:36:2,{1}:36:2"
+THREADS=()
+for t in 1 2 4 8 16 32 36 64 72; do THREADS+=(--run "p1_t${t}_2d_blocking"); done
+run --config experiments/strong_scaling_openmp.json "${NODE[@]}" "${THREADS[@]}"

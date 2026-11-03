@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_exp0
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l walltime=01:00:00
+#PBS -j oe
+# Experiment 0: CTest and the correctness cases. Submit from the repository.
+
+HEAT2D_TESTS=ON
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+(unset OMP_PLACES OMP_PROC_BIND; ctest --test-dir "$BUILD" --output-on-failure) > "$BUILD.ctest.log" 2>&1
+echo "ctest exit $?"
+tail -3 "$BUILD.ctest.log"
+(unset OMP_PLACES OMP_PROC_BIND
+ python3 scripts/check_correctness.py --build-dir "$BUILD" --launcher "mpirun --oversubscribe --bind-to none -n {ranks}")
+echo "experiment 0 exit $?"
