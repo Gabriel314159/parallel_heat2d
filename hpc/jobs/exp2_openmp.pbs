@@ -9,7 +9,9 @@
 
 source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
 gate
-run --config experiments/strong_scaling_openmp.json "${CORE[@]}" --run serial_reference --run serial_omp_reference
+# qsub -v PART=threads skips the serial references.
+[ "${PART:-all}" = threads ] ||
+    run --config experiments/strong_scaling_openmp.json "${CORE[@]}" --run serial_reference --run serial_omp_reference
 export OMP_PLACES="{0}:36:2,{1}:36:2"
 THREADS=()
 for t in 1 2 4 8 16 32 36 64 72; do THREADS+=(--run "p1_t${t}_2d_blocking"); done

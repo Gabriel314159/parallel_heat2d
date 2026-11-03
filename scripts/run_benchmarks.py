@@ -387,7 +387,7 @@ def main() -> int:
                     print(f"{name}: {phase} {repetition}, {result['elapsed_s']:.4g} s, "
                           f"{result['poisson_iterations_mean']:.0f} CG iterations per step, binding {result['binding']}")
                 except Exception as error:  # any failure becomes an error row
-                    row.update(status="error", error=" | ".join(str(error).splitlines()))
+                    row.update(status="error", error=" | ".join(str(error).replace("\0", "").splitlines()))
                     failures += 1
                     print(f"{name}: {phase} {repetition} FAILED: {error}", file=sys.stderr)
                 writer.writerow(row)

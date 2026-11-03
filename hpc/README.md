@@ -62,10 +62,10 @@ Decided on 3 November 2026; check it in the first job with `mpirun --report-bind
 | --- | --- | --- |
 | Both serial references (`--launch-serial`) and runs of up to 32 ranks × 1 thread (experiments 1 and 5) | `--map-by core --bind-to core` | `cores` |
 | 64 ranks or more (experiments 1, 4 and 5) and the first six layouts of experiment 3 (256 × 1 to 8 × 32) | `--map-by ppr:{ranks_per_socket}:socket:PE={threads} --bind-to core`, with `--cores-per-node 64 --sockets-per-node 2`: 32 cores per socket | `cores` |
-| Experiment 2, 1 rank × T threads | the rank on the whole node: `--map-by ppr:1:node:PE=72 --bind-to core` | `"{0}:36:2,{1}:36:2"`: the first 36 threads on socket 0, then socket 1 |
-| Experiment 3, 4 × 64, in a runner call of its own (`--run p4_t64_2d_blocking`) | the rank on the whole node: `--map-by ppr:1:node:PE=72 --bind-to core` | `"{0}:32:2,{1}:32:2"`: 32 cores of each socket |
+| Experiment 2, 1 rank × T threads | the rank on the whole node: `--map-by ppr:1:node --bind-to none` | `"{0}:36:2,{1}:36:2"`: the first 36 threads on socket 0, then socket 1 |
+| Experiment 3, 4 × 64, in a runner call of its own (`--run p4_t64_2d_blocking`) | the rank on the whole node: `--map-by ppr:1:node --bind-to none` | `"{0}:32:2,{1}:32:2"`: 32 cores of each socket |
 
-`OMP_PROC_BIND=close` in all cases. Set an explicit `OMP_PLACES` in the environment of that runner call and pass it on with `--mpi-arg=-x --mpi-arg=OMP_PLACES` (the runner reads braces in `--mpi-arg` as placeholders, so the list itself must not go there). Whether Open MPI accepts `PE=72` with the slots that PBS's `mpiprocs` gives, and keeps `PE` with `ppr`, is part of the first check. The solvers record the number of nodes; mark in the figures where the runs start to span nodes (above 64 cores).
+`OMP_PROC_BIND=close` in all cases. Set an explicit `OMP_PLACES` in the environment of that runner call and pass it on with `--mpi-arg=-x --mpi-arg=OMP_PLACES` (the runner reads braces in `--mpi-arg` as placeholders, so the list itself must not go there). Open MPI 5 refuses to bind one rank to cores of both sockets (`PE=72`), so a rank that holds a whole node is not bound by `mpirun`; the explicit `OMP_PLACES` list pins its threads, and the solver's binding check confirms one thread per core. The solvers record the number of nodes; mark in the figures where the runs start to span nodes (above 64 cores).
 
 ## GPU build
 

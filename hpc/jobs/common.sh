@@ -29,7 +29,8 @@ RUN=(python3 scripts/run_benchmarks.py --build-dir "$BUILD" --launcher "$MPIRUN"
 CORE=(--mpi-arg=--map-by --mpi-arg=core --mpi-arg=--bind-to --mpi-arg=core)
 SOCKET=(--mpi-arg=--map-by "--mpi-arg=ppr:{ranks_per_socket}:socket:PE={threads}" --mpi-arg=--bind-to --mpi-arg=core
         --cores-per-node 64 --sockets-per-node 2)
-NODE=(--mpi-arg=--map-by --mpi-arg=ppr:1:node:PE=72 --mpi-arg=--bind-to --mpi-arg=core)
+# One rank per node: Open MPI binds no rank across sockets, so OpenMP's places pin the threads.
+NODE=(--mpi-arg=--map-by --mpi-arg=ppr:1:node --mpi-arg=--bind-to --mpi-arg=none)
 
 # One runner call; on failure, report and go on.
 run() { "${RUN[@]}" "$@" || echo "runner failed: $*"; }
