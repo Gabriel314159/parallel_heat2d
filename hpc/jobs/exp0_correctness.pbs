@@ -12,5 +12,5 @@ source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
 echo "ctest exit $?"
 tail -3 "$BUILD.ctest.log"
 (unset OMP_PLACES OMP_PROC_BIND
- python3 scripts/check_correctness.py --build-dir "$BUILD" --launcher "mpirun --oversubscribe --bind-to none -n {ranks}")
+ python3 scripts/check_correctness.py --build-dir "$BUILD" --launcher "$MPIRUN --oversubscribe --bind-to none -n {ranks}")
 echo "experiment 0 exit $?"
