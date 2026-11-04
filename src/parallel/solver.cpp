@@ -16,6 +16,9 @@
 #ifdef HEAT2D_USE_OPENMP
 #include <omp.h>
 #endif
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 #include "common/affinity.hpp"
 #include "common/corners.hpp"
@@ -341,6 +344,11 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     // Before the first OpenMP region, so that all loops below use this count.
     const int threads = configure_threads(cfg.threads.value_or(0));
     check_same_threads(threads, layout.comm);
+#if defined(__linux__) && defined(PR_SET_THP_DISABLE)
+    // With 2 MiB pages, whichever thread touches a page first would decide the
+    // socket of a whole block of rows; 4 KiB pages keep the placement per thread.
+    if (threads > 1) prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0);
+#endif
     const int nodes = count_nodes(layout);
 
     // Threads that share a core, or that the operating system may move from

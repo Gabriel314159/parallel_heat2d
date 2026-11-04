@@ -14,6 +14,7 @@ The login node is a virtual machine of another type than the compute nodes, and 
 
 - **System:** `vanda.nus.edu.sg`, Red Hat Enterprise Linux 9.4, PBS Pro (`qsub`, `qstat`). `hpc cpu` and `hpc gpu` print sample job scripts.
 - **CPU nodes** (`cn-…`, about 140): 72 cores and 501 GB each. `lscpu` on a CPU node: two Intel Xeon Platinum 8452Y of 36 cores, one thread per core (no hyper-threading), two NUMA nodes, one per socket. The core numbers alternate between the sockets: the even ones are socket 0, the odd ones socket 1 (see "Binding").
+- **Memory pages:** transparent huge pages (2 MiB) are `always` on the login node; the job log of [jobs/weak_extra.pbs](jobs/weak_extra.pbs) prints the compute node's setting. `heat_parallel` turns them off for itself when it runs more than one thread, so that the first touch of a page by a thread places it on that thread's socket (`docs/design.md`, "Data storage and shared computation").
 - **GPU nodes** (`gn-a40-…`, about 90): the same two CPUs, 501 GB and two NVIDIA A40 (46 GB usable, compute capability 8.6, driver 575.57). The site gives each GPU one socket of 36 cores; `nvidia-smi topo -m` puts GPU 0 on NUMA node 0.
 - **OpenMP offload** (tested on the A40): `nvc++ -mp=gpu` from `nvhpc/26.1` and `clang++ -fopenmp --offload-arch=sm_80` from `LLVM/20.1.7-GCCcore-14.2.0` both build a test program whose target region runs on the GPU. Neither `g++` can: the system `g++` 11.4 names the target but lacks its offload tools, and `gcc/13.1.0` was built without it. On a CPU node the `nvc++` program runs its target region on the host, and `clang++` does not build (no CUDA libraries there).
 - **Free queues** (`-q auto_free`): `cpu_parallel`, 2 to 160 cores, at most 2 running jobs; `gpu`, at most 36 cores and 2 GPUs, 48 hours.
@@ -90,11 +91,12 @@ qsub -P <project> hpc/jobs/exp2_openmp.pbs
 qsub -P <project> hpc/jobs/exp5_one_node.pbs
 qsub -P <project> hpc/jobs/four_nodes.pbs
 qsub -P <project> hpc/jobs/exp3_gpu.pbs
+qsub -P <project> hpc/jobs/weak_extra.pbs
 ```
 
 With `-P` and no `-q`, the default queue `auto` routes a job to `batch_cpu` or `batch_gpu`, which accept jobs only from it.
 
-`four_nodes.pbs` runs everything above one node (experiments 1 and 5 at 128 and 256 ranks, 3 and 4); `exp3_gpu.pbs` builds the GPU version. A failed run is recorded and the runner goes on with the next configuration; each run's launcher output, with `--report-bindings`, is in `outputs/<experiment>/<session>/`. Do not change the checkout on Vanda while jobs are queued: each job builds what is there when it starts. Vanda's Open MPI 5 starts its daemons over ssh, even on the job's own node, and they are found only with `mpirun --prefix $EBROOTPRRTE`, and the ranks find the modules' libraries only with `-x LD_LIBRARY_PATH`; [jobs/mpirun.sh](jobs/mpirun.sh) adds both, and the jobs use it as the launcher.
+`four_nodes.pbs` runs everything above one node (experiments 1 and 5 at 128 and 256 ranks, 3 and 4); `exp3_gpu.pbs` builds the GPU version. `weak_extra.pbs` takes four nodes and is submitted from a checkout of its own, because a job builds what its checkout holds when it starts: experiment 5 at 9, 36 and 144 ranks and the placement control (`experiments/weak_scaling_extra.json`, `experiments/placement_control.json`), then experiment 2 and the 4 × 64 layout of experiment 3 again after the first-touch change, into `strong_scaling_openmp_firsttouch.csv` and `hybrid_layouts_firsttouch.csv`. Its single-node runs go on two nodes at the same time, and each is pinned to its node with `--host`. A failed run is recorded and the runner goes on with the next configuration; each run's launcher output, with `--report-bindings`, is in `outputs/<experiment>/<session>/`. Do not change the checkout on Vanda while jobs are queued: each job builds what is there when it starts. Vanda's Open MPI 5 starts its daemons over ssh, even on the job's own node, and they are found only with `mpirun --prefix $EBROOTPRRTE`, and the ranks find the modules' libraries only with `-x LD_LIBRARY_PATH`; [jobs/mpirun.sh](jobs/mpirun.sh) adds both, and the jobs use it as the launcher.
 
 ## Large single runs
 

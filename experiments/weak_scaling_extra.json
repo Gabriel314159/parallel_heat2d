@@ -1,0 +1,22 @@
+{
+  "schema_version": 5,
+  "kind": "weak_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Extra points of experiment 5 between the powers of 4: 9, 36 and 144 ranks (3x3, 6x6, 12x12). Same setup as weak_scaling.json; no serial reference. hpc/jobs/weak_extra.pbs places them: 9 on socket 0, 36 as 18+18 on one node, 144 as 24+24 on each of 3 nodes.",
+  "local_nx": 256,
+  "local_ny": 256,
+  "spacing": {"dx": 0.00390625, "dy": 0.00390625},
+  "execution": {"backend": "parallel"},
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": false,
+  "resources": [
+    {"mpi_ranks": 9, "omp_threads": 1, "process_grid": [3, 3], "problem": {"blob_centre": [1.5, 1.5]}},
+    {"mpi_ranks": 36, "omp_threads": 1, "process_grid": [6, 6], "problem": {"blob_centre": [3.0, 3.0]}},
+    {"mpi_ranks": 144, "omp_threads": 1, "process_grid": [12, 12], "problem": {"blob_centre": [6.0, 6.0]}}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/weak_scaling_extra", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/weak_scaling_extra.csv"
+}

@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <utility>  // std::swap
+#include <vector>
 
 namespace {
 
@@ -55,6 +56,25 @@ int main() {
 
         c.fill(7.0);
         check(c(1, 1) == 7.0 && c(0, nx + 1) == 7.0, "fill sets every value");
+    }
+
+    std::cout << "Recycled storage\n";
+    {
+        // The storage is allocated unset and zeroed by the constructor: it must not keep what the block held.
+        volatile double sink = 0.0;
+        {
+            std::vector<double> poison(static_cast<std::size_t>((ny + 2 * halo) * (nx + 2 * halo)), 7.0);
+            sink = poison[0];
+        }
+        Field c(ny, nx);
+        FaceVelocities u(ny, nx);
+        bool all_zero = true;
+        for (double v : c.values()) all_zero = all_zero && v == 0.0;
+        for (int i = 1; i <= ny; ++i)
+            for (int j = 0; j <= nx; ++j) all_zero = all_zero && u.east(i, j) == 0.0;
+        for (int i = 1; i <= ny + 1; ++i)
+            for (int j = 1; j <= nx; ++j) all_zero = all_zero && u.north(i, j) == 0.0;
+        check(all_zero && sink == 7.0, "Field and FaceVelocities are zero on recycled memory");
     }
 
     std::cout << "Swap\n";

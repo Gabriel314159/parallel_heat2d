@@ -1,0 +1,269 @@
+[
+  {
+    "run": "pigment_one_rank",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 8.04e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00 (1 ranks x 1 threads: one rank, one thread)"
+      }
+    ]
+  },
+  {
+    "run": "mpi_only_rows",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 5.15e-13 (3 ranks x 1 threads: MPI only)"
+      }
+    ]
+  },
+  {
+    "run": "mpi_only_2d",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 7.24e-13 (6 ranks x 1 threads: MPI only)"
+      }
+    ]
+  },
+  {
+    "run": "openmp_only",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 9.53e-13 (1 ranks x 4 threads: OpenMP only)"
+      }
+    ]
+  },
+  {
+    "run": "uneven_rows_blocking",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 6.03e-13 (3 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "uneven_rows_overlap",
+    "exchange": "overlap",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 3.92e-13 (3 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "uneven_2d_blocking",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 5.22e-13 (6 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "uneven_2d_overlap",
+    "exchange": "overlap",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 4.02e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 5.04e-13 (6 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "periodic_wind_2d_overlap",
+    "exchange": "overlap",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 2.01e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 1.62e-13 (6 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "small_local_blocks_overlap",
+    "exchange": "overlap",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 3.93e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00 (4 ranks x 1 threads: MPI only)"
+      }
+    ]
+  },
+  {
+    "run": "constant_field",
+    "exchange": "overlap",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 0.00e+00 (tolerance 1e-12)"
+      },
+      {
+        "check": "constant field",
+        "passed": true,
+        "detail": "max |c - 42| = 1.42e-14"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 2.13e-14 (4 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  },
+  {
+    "run": "cosine_decay",
+    "exchange": "blocking",
+    "checks": [
+      {
+        "check": "mass conservation",
+        "passed": true,
+        "detail": "relative change 1.50e-17 (tolerance 1e-12)"
+      },
+      {
+        "check": "cosine vs exact discrete",
+        "passed": true,
+        "detail": "9.99e-16 (tolerance 1e-12)"
+      },
+      {
+        "check": "cosine vs continuous",
+        "passed": null,
+        "detail": "7.89e-08 (discretization error, reported only)"
+      },
+      {
+        "check": "heat_serial_omp vs serial",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00"
+      },
+      {
+        "check": "serial vs parallel",
+        "passed": true,
+        "detail": "max |difference| = 0.00e+00 (4 ranks x 2 threads: MPI + OpenMP)"
+      }
+    ]
+  }
+]

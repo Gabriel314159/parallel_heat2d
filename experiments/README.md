@@ -23,6 +23,14 @@ The course asks for scaling tests up to at least 256 cores: experiments 1 and 5 
 - **Experiment 5 is the only one in which the problem grows.** It starts from one core (one rank, one thread; the serial program runs the same problem) and keeps one thread per rank, so the number of cores is the number of ranks.
 - **What experiment 4 can show.** `--exchange` selects how both halo exchanges run: the pigment's, once per step, and the conjugate gradient's, once per iteration. The two global sums of every iteration always wait, so overlap can save at most the time of the CG's halo exchanges, which every run reports (`poisson_halo_s`). See the plan.
 
+## Follow-up runs
+
+- [weak_scaling_extra.json](weak_scaling_extra.json) adds the points 9, 36 and 144 ranks to experiment 5.
+- [placement_control.json](placement_control.json) separates what changes between 16 and 64 ranks in experiment 5: crossing the sockets (16 ranks on one socket or 8 + 8), the ranks per socket (32 ranks on one socket or 16 + 16) and the CPU clock (64 ranks, 32 + 32, with the clock logged). It is a control, not an experiment of its own; the 32-rank grid is 4 × 8 on a 4 × 8 basin.
+- Experiment 2 and the 4 × 64 layout of experiment 3 were run again after `Field` began to zero its storage in parallel (`docs/design.md`, "Data storage and shared computation"). The first runs stay as the "before".
+
+All of them run in [hpc/jobs/weak_extra.pbs](../hpc/jobs/weak_extra.pbs).
+
 ## Order and repeated runs
 
 Run experiment 0 first, then 1 and 2 (they give the serial reference and the one-core baselines), then 3, 4 and 5. Experiment 0 runs with `scripts/check_correctness.py`, and every other experiment with `scripts/run_benchmarks.py --config experiments/<name>.json` (`--dry-run` shows its configurations and commands first; see `scripts/README.md`).

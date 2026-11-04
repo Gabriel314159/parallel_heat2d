@@ -181,10 +181,29 @@ def command_for(name: str, config: dict, args: argparse.Namespace) -> list[str]:
             "-n", str(execution["mpi_ranks"]), *command]
 
 
+def head_from_files() -> str | None:
+    """HEAD read from .git, for nodes without the git program."""
+    git_dir = REPO / ".git"
+    try:
+        head = (git_dir / "HEAD").read_text().strip()
+        if not head.startswith("ref: "):
+            return head
+        ref = head[5:]
+        if (git_dir / ref).is_file():
+            return (git_dir / ref).read_text().strip()
+        for line in (git_dir / "packed-refs").read_text().splitlines():
+            if line.endswith(" " + ref):
+                return line.split()[0]
+    except OSError:
+        pass
+    return None
+
+
 def git_commit() -> str:
-    """HEAD, with "-dirty" if tracked files differ from it."""
+    """HEAD, with "-dirty" if tracked files differ from it; "-unchecked" if git is missing and only .git was read."""
     if shutil.which("git") is None:
-        return "unknown"
+        head = head_from_files()
+        return "unknown" if head is None else head + "-unchecked"
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True)
     if head.returncode != 0:
         return "unknown"

@@ -8,13 +8,46 @@
 
 #pragma once
 
-#include <cassert>  // assert: checks that are compiled out in Release builds
-#include <cstddef>  // std::size_t
+#include <algorithm>  // std::fill_n
+#include <cassert>    // assert: checks that are compiled out in Release builds
+#include <cstddef>    // std::size_t
+#include <memory>     // std::allocator
+#include <new>        // placement new
+#include <utility>    // std::forward
 #include <vector>
 
 // Width of the ghost/halo layer on every side. The upwind + five-point
 // stencil only needs 1. Use this name instead of a literal 1 everywhere.
 constexpr int halo = 1;
+
+// Allocator that leaves new elements unset. std::vector would write the zeros
+// from one thread, and Linux puts a page on the socket of the thread that
+// writes it first; zero_rows does the first write instead.
+template <class T>
+struct UnsetAllocator {
+    using value_type = T;
+    UnsetAllocator() = default;
+    template <class U>
+    UnsetAllocator(const UnsetAllocator<U>&) noexcept {}
+    T* allocate(std::size_t n) { return std::allocator<T>().allocate(n); }
+    void deallocate(T* p, std::size_t n) noexcept { std::allocator<T>().deallocate(p, n); }
+    template <class U>
+    void construct(U* p) { ::new (static_cast<void*>(p)) U; }
+    template <class U, class... Args>
+    void construct(U* p, Args&&... args) { ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...); }
+    bool operator==(const UnsetAllocator&) const noexcept { return true; }
+    bool operator!=(const UnsetAllocator&) const noexcept { return false; }
+};
+using Storage = std::vector<double, UnsetAllocator<double>>;
+
+// Zero `rows` rows of `width` doubles, shared out like the solver loops
+// (OpenMP static schedule): each thread first touches the rows it computes on.
+inline void zero_rows(double* data, int rows, std::size_t width) {
+#ifdef HEAT2D_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (int r = 0; r < rows; ++r) std::fill_n(data + static_cast<std::size_t>(r) * width, width, 0.0);
+}
 
 // Where a local block of cells sits in the global grid, and which of its four
 // sides lie on a physical wall. The serial solver uses one block covering the
@@ -44,8 +77,10 @@ class Field {
 public:
     // Constructor: runs when a Field is created, e.g.  Field c(ny, nx);
     // The part after ":" initializes the members before the body runs.
-    Field(int ny, int nx) : ny_(ny), nx_(nx), values_() {
-        values_.assign(static_cast<std::size_t>(ny_ + 2 * halo) * static_cast<std::size_t>(nx_ + 2 * halo), 0.0);
+    Field(int ny, int nx)
+        : ny_(ny), nx_(nx),
+          values_(static_cast<std::size_t>(ny + 2 * halo) * static_cast<std::size_t>(nx + 2 * halo)) {
+        zero_rows(values_.data(), ny_ + 2 * halo, static_cast<std::size_t>(stride()));
     }
 
     // "const" after the parentheses: calling this does not modify the Field.
@@ -72,7 +107,7 @@ public:
     void fill(double value) { values_.assign(values_.size(), value); }
 
     // Raw access to the whole vector, ghosts included. Used for output and tests.
-    const std::vector<double>& values() const { return values_; }
+    const Storage& values() const { return values_; }
 
     // The storage as one array, ghosts included: (i, j) is at i * stride() + j.
     double* data() { return values_.data(); }
@@ -92,7 +127,7 @@ private:
     // Trailing underscore: a common convention for private member names.
     int ny_;
     int nx_;
-    std::vector<double> values_;
+    Storage values_;
 };
 
 // Normal velocities on the cell faces of an ny x nx block (no ghosts needed).
@@ -107,8 +142,11 @@ public:
     FaceVelocities(int ny, int nx)
         : ny_(ny),
           nx_(nx),
-          east_(static_cast<std::size_t>(ny) * static_cast<std::size_t>(nx + 1), 0.0),
-          north_(static_cast<std::size_t>(ny + 1) * static_cast<std::size_t>(nx), 0.0) {}
+          east_(static_cast<std::size_t>(ny) * static_cast<std::size_t>(nx + 1)),
+          north_(static_cast<std::size_t>(ny + 1) * static_cast<std::size_t>(nx)) {
+        zero_rows(east_.data(), ny, static_cast<std::size_t>(nx + 1));
+        zero_rows(north_.data(), ny + 1, static_cast<std::size_t>(nx));
+    }
 
     int ny() const { return ny_; }
     int nx() const { return nx_; }
@@ -141,6 +179,6 @@ private:
 
     int ny_;
     int nx_;
-    std::vector<double> east_;
-    std::vector<double> north_;
+    Storage east_;
+    Storage north_;
 };

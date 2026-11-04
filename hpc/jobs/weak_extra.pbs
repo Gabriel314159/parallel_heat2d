@@ -1,0 +1,57 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_weak_extra
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=02:30:00
+#PBS -j oe
+# Follow-up runs: experiment 5 at 9, 36 and 144 ranks; the placement control
+# (experiments/placement_control.json); experiment 2 and the 4 x 64 layout of
+# experiment 3 again, after the first-touch change (src/common/grid.hpp).
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+echo "transparent huge pages: $(cat /sys/kernel/mm/transparent_hugepage/enabled)"
+gate
+NODES=($(awk '!seen[$0]++' "$PBS_NODEFILE"))
+HOST1=(--mpi-arg=--host "--mpi-arg=${NODES[0]}:72")
+HOST2=(--mpi-arg=--host "--mpi-arg=${NODES[1]}:72")
+EXTRA=(--config experiments/weak_scaling_extra.json)
+CONTROL=(--config experiments/placement_control.json)
+
+# Several nodes: one run at a time.
+run "${EXTRA[@]}" "${SOCKET[@]}" --run p144_t1_2d_blocking
+(export OMP_PLACES="{0}:32:2,{1}:32:2"
+ run --config experiments/hybrid_layouts.json --metrics-csv results/raw/hybrid_layouts_firsttouch.csv \
+     "${NODE[@]}" --run p4_t64_2d_blocking)
+
+# One node: a stream on each of two nodes, at the same time.
+(
+    run "${EXTRA[@]}" "${CORE[@]}" "${HOST1[@]}" --run p9_t1_2d_blocking
+    run "${EXTRA[@]}" "${SOCKET[@]}" "${HOST1[@]}" --run p36_t1_2d_blocking
+    run "${CONTROL[@]}" "${CORE[@]}" "${HOST1[@]}" --run p16_t1_2d_blocking
+    run "${CONTROL[@]}" "${SOCKET[@]}" "${HOST1[@]}" --run p16_t1_2d_blocking
+    run "${CONTROL[@]}" "${CORE[@]}" "${HOST1[@]}" --run p32_t1_2d_blocking
+    run "${CONTROL[@]}" "${SOCKET[@]}" "${HOST1[@]}" --run p32_t1_2d_blocking
+    run "${CONTROL[@]}" "${SOCKET[@]}" "${HOST1[@]}" --run p64_t1_2d_blocking
+    # The same 64-rank layout again, with the MHz of every CPU logged every 5 s.
+    MHZ="outputs/placement_control/mhz_${PBS_JOBID%%.*}.log"
+    mkdir -p outputs/placement_control
+    echo "# $(hostname), 5 s samples, MHz of CPU 0..$(($(nproc) - 1))" > "$MHZ"
+    while true; do
+        echo "$(date -u +%FT%TZ) $(awk '/MHz/ {printf "%.0f ", $4}' /proc/cpuinfo)"
+        sleep 5
+    done >> "$MHZ" &
+    LOGGER=$!
+    run "${CONTROL[@]}" "${SOCKET[@]}" "${HOST1[@]}" --run p64_t1_2d_blocking
+    kill "$LOGGER"
+) 2>&1 | sed -u 's/^/[node 1] /' &
+
+(
+    export OMP_PLACES="{0}:36:2,{1}:36:2"
+    THREADS=()
+    for t in 1 2 4 8 16 32 36 64 72; do THREADS+=(--run "p1_t${t}_2d_blocking"); done
+    run --config experiments/strong_scaling_openmp.json --metrics-csv results/raw/strong_scaling_openmp_firsttouch.csv \
+        "${NODE[@]}" "${HOST2[@]}" "${THREADS[@]}"
+) 2>&1 | sed -u 's/^/[node 2] /' &
+wait
