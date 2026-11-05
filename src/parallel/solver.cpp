@@ -243,6 +243,12 @@ double max_over_ranks(double value, MPI_Comm comm) {
     return result;
 }
 
+double min_over_ranks(double value, MPI_Comm comm) {
+    double result = 0.0;
+    mpi_check(MPI_Allreduce(&value, &result, 1, MPI_DOUBLE, MPI_MIN, comm), "global minimum");
+    return result;
+}
+
 int min_over_ranks(int value, MPI_Comm comm) {
     int result = 0;
     mpi_check(MPI_Allreduce(&value, &result, 1, MPI_INT, MPI_MIN, comm), "global minimum");
@@ -487,6 +493,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     const double poisson_max = max_over_ranks(poisson_seconds, layout.comm);
     const double poisson_halo_max = max_over_ranks(poisson_comm.halo, layout.comm);
     const double poisson_sum_max = max_over_ranks(poisson_comm.sum, layout.comm);
+    const double poisson_sum_min = min_over_ranks(poisson_comm.sum, layout.comm);
     const double mass_final = sum_over_ranks(local_mass(current, dx, dy), layout.comm);
     double e = 0.0, z = 0.0;
     local_energy_enstrophy(flow.psi(), flow.zeta(), b, dx, dy, e, z);
@@ -523,6 +530,7 @@ ParallelResult run_parallel(const Config& cfg, MPI_Comm world) {
     s.poisson_s = poisson_max;
     s.poisson_halo_s = poisson_halo_max;
     s.poisson_sum_s = poisson_sum_max;
+    s.poisson_sum_min_s = poisson_sum_min;
     s.poisson_copy_s = max_over_ranks(poisson_copy, layout.comm);
 #ifdef HEAT2D_USE_OFFLOAD
     // Every rank must have run its solve on a GPU for the run to count as one.

@@ -132,6 +132,7 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("poisson_s", s.poisson_s);
     json.add("poisson_halo_s", s.poisson_halo_s);
     json.add("poisson_sum_s", s.poisson_sum_s);
+    json.add("poisson_sum_min_s", s.poisson_sum_min_s);
     json.add("poisson_device", s.poisson_device);
     json.add("poisson_copy_s", s.poisson_copy_s);
     json.add("poisson_iterations_mean", iterations_mean(s));
@@ -183,7 +184,7 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
         << " CG iterations per step on average, at most " << s.poisson_iterations_max << ")";
     if (s.solver == "heat_parallel") {
         out << "; inside them, halo exchanges " << s.poisson_halo_s << " s and global sums " << s.poisson_sum_s
-            << " s";
+            << " s (at least " << s.poisson_sum_min_s << " s on every rank)";
     }
     if (s.poisson_device != "cpu") {
         out << "\n  Poisson solve on: " << s.poisson_device << ", copies between host and GPU " << s.poisson_copy_s

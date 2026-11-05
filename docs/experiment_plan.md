@@ -90,7 +90,7 @@ The discrete steady state (two Poisson solves) must converge to it at second ord
 - Allocate enough cores and memory for the largest layout. Avoid oversubscription and unrelated concurrent runs.
 - On Vanda a node has 72 cores in two sockets of 36 (`hpc/README.md`). Every timed run reserves its nodes exclusively (`place=excl`); a run on several nodes uses 64 cores of each, 32 per socket, so that 256 cores are four nodes and every layout of experiment 3 fits the sockets. Mark in the figures where the runs start to span nodes.
 
-The parallel solver reports two phase times of the Poisson solves: `poisson_halo_s`, the time inside the CG's halo exchanges (under overlap only posting and waiting, the part not hidden), and `poisson_sum_s`, the time inside its global sums, including the wait for the slowest rank. Each is the largest over the ranks, so they are diagnostic and not additive estimates of the total runtime.
+The parallel solver reports two phase times of the Poisson solves: `poisson_halo_s`, the time inside the CG's halo exchanges (under overlap only posting and waiting, the part not hidden), and `poisson_sum_s`, the time inside its global sums, including the wait for the slowest rank. Each is the largest over the ranks, so they are diagnostic and not additive estimates of the total runtime. `poisson_sum_min_s` is the smallest global-sum time over the ranks. A rank that arrives last at every sum waits for nobody, so it is close to the cost of the reduction itself (an upper bound on it), and `poisson_sum_s` minus it is mostly waiting for other ranks.
 
 ## The whole computation and its dominant part
 

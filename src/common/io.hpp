@@ -54,6 +54,7 @@ struct RunSummary {
     double poisson_s = 0.0;
     double poisson_halo_s = 0.0;
     double poisson_sum_s = 0.0;
+    double poisson_sum_min_s = 0.0;  // the global sums' time, min over ranks: close to the reduction alone
     std::string poisson_device = "cpu";  // "cpu"; GPU build: "gpu" or "host (no GPU found)"
     double poisson_copy_s = 0.0;         // host-GPU copies; max over ranks
     long poisson_iterations = 0;     // CG iterations over the main loop
