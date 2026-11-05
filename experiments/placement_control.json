@@ -2,7 +2,7 @@
   "schema_version": 5,
   "kind": "weak_scaling",
   "defaults": "benchmark_problem.json",
-  "description": "Control for the 16 -> 64 rank step of experiment 5, on one node with the weak-scaling block per rank. 16 ranks (4x4): socket 0 vs 8+8, so only the socket crossing changes. 32 ranks (4x8 ranks, 1024 x 2048 cells, basin 4 x 8; a control, not a weak-scaling point): socket 0 vs 16+16, so only the ranks per socket change. 64 ranks (8x8), 32+32 twice, the second time with a CPU frequency log, to test whether the slowdown from one repetition to the next is throttling. hpc/jobs/weak_extra.pbs gives each layout its own runner call; the layout is the session's mpi_arg.",
+  "description": "Control for the 16 -> 64 rank step of experiment 5, on one node with the weak-scaling block per rank. 16 ranks (4x4): socket 0 vs 8+8, so only the socket crossing changes. 32 ranks (4x8 ranks, 1024 x 2048 cells, basin 4 x 8; a control, not a weak-scaling point): socket 0 vs 16+16, so only the ranks per socket change. 64 ranks (8x8), 32+32 twice, the second time with a CPU frequency log, to test whether the slowdown from one repetition to the next is throttling. hpc/jobs/extra_onenode.pbs gives each layout its own runner call; the layout is the session's mpi_arg.",
   "local_nx": 256,
   "local_ny": 256,
   "spacing": {"dx": 0.00390625, "dy": 0.00390625},

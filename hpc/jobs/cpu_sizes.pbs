@@ -1,0 +1,17 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_cpusz
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+# The CPU side of the GPU crossover (experiments/gpu_size_*.json): one rank of 36 threads
+# on socket 0, then one rank per socket.
+
+HEAT2D_TIMEOUT=1800
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+SOCKET36=(--mpi-arg=--map-by --mpi-arg=ppr:1:socket:PE=36 --mpi-arg=--bind-to --mpi-arg=core)
+for size in 512 1024 2048 4096; do
+    run --config "experiments/gpu_size_$size.json" --metrics-csv results/raw/gpu_sizes_cpu.csv "${SOCKET36[@]}"
+done

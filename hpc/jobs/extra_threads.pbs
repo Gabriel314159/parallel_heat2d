@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_xthr
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=01:30:00
+#PBS -j oe
+# Experiment 2 again, after the first-touch change (src/common/grid.hpp). The serial
+# references and the 1-thread run (unchanged code path) are not repeated.
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+echo "transparent huge pages: $(cat /sys/kernel/mm/transparent_hugepage/enabled)"
+gate
+export OMP_PLACES="{0}:36:2,{1}:36:2"
+THREADS=()
+for t in 2 4 8 16 32 36 64 72; do THREADS+=(--run "p1_t${t}_2d_blocking"); done
+run --config experiments/strong_scaling_openmp.json --metrics-csv results/raw/strong_scaling_openmp_firsttouch.csv \
+    "${NODE[@]}" "${THREADS[@]}"

@@ -1,0 +1,31 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_xmulti
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=02:30:00
+#PBS -j oe
+# Follow-up runs on several nodes: experiment 5 at 144 ranks; experiment 3 again
+# (first-touch fix, 10 repetitions); 64 ranks on 1, 2 and 4 nodes (experiments 1 and 5).
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+echo "transparent huge pages: $(cat /sys/kernel/mm/transparent_hugepage/enabled)"
+gate
+
+run --config experiments/weak_scaling_extra.json --metrics-csv results/raw/weak_scaling_extra_3nodes.csv \
+    "${SOCKET[@]}" --run p144_t1_2d_blocking
+
+LAYOUTS=(--config experiments/hybrid_layouts.json --metrics-csv results/raw/hybrid_layouts_firsttouch.csv --repetitions 10)
+run "${LAYOUTS[@]}" "${SOCKET[@]}" --run p256_t1_2d_blocking --run p128_t2_2d_blocking \
+    --run p64_t4_2d_blocking --run p32_t8_2d_blocking --run p16_t16_2d_blocking --run p8_t32_2d_blocking
+(export OMP_PLACES="{0}:32:2,{1}:32:2"
+ run "${LAYOUTS[@]}" "${NODE[@]}" --run p4_t64_2d_blocking)
+
+# The same 64 ranks on one node (32 + 32), two (16 + 16 each) and four (8 + 8 each).
+for per_node in 64 32 16; do
+    run --config experiments/strong_scaling_mpi.json --metrics-csv results/raw/node_spread.csv \
+        "${SOCKET[@]}" --cores-per-node "$per_node" --run p64_t1_2d_blocking
+    run --config experiments/placement_control.json --metrics-csv results/raw/node_spread.csv \
+        "${SOCKET[@]}" --cores-per-node "$per_node" --run p64_t1_2d_blocking
+done

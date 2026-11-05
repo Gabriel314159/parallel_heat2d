@@ -2,7 +2,7 @@
   "schema_version": 5,
   "kind": "weak_scaling",
   "defaults": "benchmark_problem.json",
-  "description": "Extra points of experiment 5 between the powers of 4: 9, 36 and 144 ranks (3x3, 6x6, 12x12). Same setup as weak_scaling.json; no serial reference. hpc/jobs/weak_extra.pbs places them: 9 on socket 0, 36 as 18+18 on one node, 144 as 24+24 on each of 3 nodes.",
+  "description": "Extra points of experiment 5 between the powers of 4: 9, 36 and 144 ranks (3x3, 6x6, 12x12). Same setup as weak_scaling.json; no serial reference. hpc/jobs/extra_multinode.pbs and extra_onenode.pbs places them: 9 on socket 0, 36 as 18+18 on one node, 144 as 24+24 on each of 3 nodes.",
   "local_nx": 256,
   "local_ny": 256,
   "spacing": {"dx": 0.00390625, "dy": 0.00390625},
@@ -18,5 +18,5 @@
   "warmup_runs": 1,
   "repetitions": 5,
   "output": {"directory": "outputs/weak_scaling_extra", "write_field": false, "snapshot_interval": 0},
-  "metrics_csv": "results/raw/weak_scaling_extra.csv"
+  "metrics_csv": "results/raw/weak_scaling_extra_1node.csv"
 }

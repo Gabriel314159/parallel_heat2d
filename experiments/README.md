@@ -25,11 +25,14 @@ The course asks for scaling tests up to at least 256 cores: experiments 1 and 5 
 
 ## Follow-up runs
 
-- [weak_scaling_extra.json](weak_scaling_extra.json) adds the points 9, 36 and 144 ranks to experiment 5.
+- [weak_scaling_extra.json](weak_scaling_extra.json) adds the points 9, 36 and 144 ranks to experiment 5; the first two are on one node (`weak_scaling_extra_1node.csv`), the last on three (`weak_scaling_extra_3nodes.csv`).
 - [placement_control.json](placement_control.json) separates what changes between 16 and 64 ranks in experiment 5: crossing the sockets (16 ranks on one socket or 8 + 8), the ranks per socket (32 ranks on one socket or 16 + 16) and the CPU clock (64 ranks, 32 + 32, with the clock logged). It is a control, not an experiment of its own; the 32-rank grid is 4 × 8 on a 4 × 8 basin.
-- Experiment 2 and the 4 × 64 layout of experiment 3 were run again after `Field` began to zero its storage in parallel (`docs/design.md`, "Data storage and shared computation"). The first runs stay as the "before".
+- Experiment 2 (2 to 72 threads) and experiment 3 (all seven layouts, 10 repetitions) were run again after `Field` began to zero its storage in parallel (`docs/design.md`, "Data storage and shared computation"), into the `*_firsttouch.csv` files. The first runs stay as the "before".
+- [hybrid_node.json](hybrid_node.json) splits the 64 cores of one node between ranks and threads, from 64 × 1 to 2 × 32, to tell the effect of mixing ranks and threads from the effect of crossing nodes in experiment 3.
+- 64 ranks on 1, 2 and 4 nodes (32 + 32, 16 + 16 and 8 + 8 per node), for the problem of experiment 1 and the block per rank of experiment 5, into `node_spread.csv`: it measures what leaving the node costs.
+- [gpu_size_512.json](gpu_size_512.json) to `gpu_size_4096.json` find where the GPU overtakes the CPU: one rank of 36 threads with one A40, and two ranks with two, against the same layouts on the CPU, at 512, 1024, 2048 and 4096 cells a side (100, 100, 20 and 10 steps). Compare the time per CG iteration.
 
-All of them run in [hpc/jobs/weak_extra.pbs](../hpc/jobs/weak_extra.pbs).
+The jobs are in [hpc/jobs/](../hpc/jobs): `extra_multinode.pbs`, `extra_onenode.pbs`, `extra_threads.pbs`, `gpu_sizes.pbs` and `cpu_sizes.pbs`. From now on `poisson_sum_min_s` is also recorded; the CSVs of the first runs do not have this column.
 
 ## Order and repeated runs
 

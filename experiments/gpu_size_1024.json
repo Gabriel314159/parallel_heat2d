@@ -1,0 +1,35 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Where the GPU overtakes the CPU: the benchmark problem on 1024 x 1024 cells, 100 steps, with one rank of 36 threads (one socket, with one GPU in the GPU build) and with two ranks (both sockets, both GPUs). experiments/gpu_size_*.json differ only in the size; the GPU build writes gpu_sizes_gpu.csv, and the CPU build, run with --metrics-csv, gpu_sizes_cpu.csv. Compare the time per CG iteration: the number of steps is smaller on the large grids to keep the runs short.",
+  "problem": {
+    "nx": 1024,
+    "ny": 1024,
+    "steps": 100
+  },
+  "execution": {
+    "backend": "parallel"
+  },
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": false,
+  "resources": [
+    {
+      "mpi_ranks": 1,
+      "omp_threads": 36
+    },
+    {
+      "mpi_ranks": 2,
+      "omp_threads": 36
+    }
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {
+    "directory": "outputs/gpu_size_1024",
+    "write_field": false,
+    "snapshot_interval": 0
+  },
+  "metrics_csv": "results/raw/gpu_sizes_gpu.csv"
+}

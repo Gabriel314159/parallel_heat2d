@@ -1,0 +1,39 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_xone
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=01:30:00
+#PBS -j oe
+# Follow-up runs on one node: experiment 5 at 9 and 36 ranks; the placement control
+# (experiments/placement_control.json) with a CPU frequency log; the 64 cores of
+# a node split between ranks and threads (experiments/hybrid_node.json).
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+echo "transparent huge pages: $(cat /sys/kernel/mm/transparent_hugepage/enabled)"
+gate
+EXTRA=(--config experiments/weak_scaling_extra.json --metrics-csv results/raw/weak_scaling_extra_1node.csv)
+CONTROL=(--config experiments/placement_control.json)
+
+run "${EXTRA[@]}" "${CORE[@]}" --run p9_t1_2d_blocking
+run "${EXTRA[@]}" "${SOCKET[@]}" --run p36_t1_2d_blocking
+run "${CONTROL[@]}" "${CORE[@]}" --run p16_t1_2d_blocking
+run "${CONTROL[@]}" "${SOCKET[@]}" --run p16_t1_2d_blocking
+run "${CONTROL[@]}" "${CORE[@]}" --run p32_t1_2d_blocking
+run "${CONTROL[@]}" "${SOCKET[@]}" --run p32_t1_2d_blocking
+run "${CONTROL[@]}" "${SOCKET[@]}" --run p64_t1_2d_blocking
+
+# The same 64-rank layout again, with the MHz of every CPU logged every 5 s.
+MHZ="outputs/placement_control/mhz_${PBS_JOBID%%.*}.log"
+mkdir -p outputs/placement_control
+echo "# $(hostname), 5 s samples, MHz of CPU 0..$(($(nproc) - 1))" > "$MHZ"
+while true; do
+    echo "$(date -u +%FT%TZ) $(awk '/MHz/ {printf "%.0f ", $4}' /proc/cpuinfo)"
+    sleep 5
+done >> "$MHZ" &
+LOGGER=$!
+run "${CONTROL[@]}" "${SOCKET[@]}" --run p64_t1_2d_blocking
+kill "$LOGGER"
+
+run --config experiments/hybrid_node.json "${SOCKET[@]}"
