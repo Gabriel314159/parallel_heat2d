@@ -1,0 +1,31 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Serial runtime against problem size: the benchmark problem on 4096 x 4096 cells of the 1 x 1 basin, 10 steps, run by the pure serial program on one core. experiments/serial_size_*.json differ only in the size and the steps (fewer on the large grids to keep the runs short); compare the time per CG iteration. The domain is fixed, so dx and the automatic dt shrink with the grid. The parallel entry is a placeholder: hpc/jobs/serial_sizes.pbs runs only the references (--run serial_reference).",
+  "problem": {
+    "nx": 4096,
+    "ny": 4096,
+    "steps": 10
+  },
+  "execution": {
+    "backend": "parallel"
+  },
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {
+      "mpi_ranks": 1,
+      "omp_threads": 1
+    }
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {
+    "directory": "outputs/serial_size_4096",
+    "write_field": false,
+    "snapshot_interval": 0
+  },
+  "metrics_csv": "results/raw/serial_sizes.csv"
+}

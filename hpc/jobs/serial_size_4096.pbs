@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_serial_4096
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+# The 4096^2 point of the serial runtime against problem size, 10 steps: no warmup, two
+# repetitions, to keep it to about an hour. It writes its own CSV (jobs must not share one).
+
+HEAT2D_TIMEOUT=5400
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+run --config experiments/serial_size_4096.json --metrics-csv results/raw/serial_sizes_4096.csv \
+    --warmup-runs 0 --repetitions 2 "${CORE[@]}" --run serial_reference
