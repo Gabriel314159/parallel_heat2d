@@ -1,0 +1,17 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_exp5_rerun
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=01:30:00
+#PBS -j oe
+# Experiment 5 again, every point in one job: the references and 1 to 256 ranks.
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+CFG=(--config experiments/weak_scaling_rerun.json)
+run "${CFG[@]}" "${CORE[@]}" --run serial_reference --run serial_omp_reference --run p1_t1_2d_blocking \
+    --run p4_t1_2d_blocking --run p9_t1_2d_blocking --run p16_t1_2d_blocking
+run "${CFG[@]}" "${SOCKET[@]}" --run p36_t1_2d_blocking --run p64_t1_2d_blocking \
+    --run p144_t1_2d_blocking --run p256_t1_2d_blocking

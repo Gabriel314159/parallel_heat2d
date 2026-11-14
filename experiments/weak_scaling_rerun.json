@@ -1,0 +1,140 @@
+{
+  "schema_version": 5,
+  "kind": "weak_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Experiment 5 rerun in one job: the references and 1, 4, 9, 16, 36, 64, 144 and 256 ranks (square process grids 1x1 ... 16x16), same setup as weak_scaling.json (256 x 256 cells per rank, dx = dy = 1/256, basin grows). hpc/jobs/exp5_rerun.pbs runs them on 4 nodes, so all points share one commit, one build and the column poisson_sum_min_s.",
+  "local_nx": 256,
+  "local_ny": 256,
+  "spacing": {
+    "dx": 0.00390625,
+    "dy": 0.00390625
+  },
+  "execution": {
+    "backend": "parallel"
+  },
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {
+      "mpi_ranks": 1,
+      "omp_threads": 1,
+      "process_grid": [
+        1,
+        1
+      ],
+      "problem": {
+        "blob_centre": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 4,
+      "omp_threads": 1,
+      "process_grid": [
+        2,
+        2
+      ],
+      "problem": {
+        "blob_centre": [
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 9,
+      "omp_threads": 1,
+      "process_grid": [
+        3,
+        3
+      ],
+      "problem": {
+        "blob_centre": [
+          1.5,
+          1.5
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 16,
+      "omp_threads": 1,
+      "process_grid": [
+        4,
+        4
+      ],
+      "problem": {
+        "blob_centre": [
+          2.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 36,
+      "omp_threads": 1,
+      "process_grid": [
+        6,
+        6
+      ],
+      "problem": {
+        "blob_centre": [
+          3.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 64,
+      "omp_threads": 1,
+      "process_grid": [
+        8,
+        8
+      ],
+      "problem": {
+        "blob_centre": [
+          4.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 144,
+      "omp_threads": 1,
+      "process_grid": [
+        12,
+        12
+      ],
+      "problem": {
+        "blob_centre": [
+          6.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "mpi_ranks": 256,
+      "omp_threads": 1,
+      "process_grid": [
+        16,
+        16
+      ],
+      "problem": {
+        "blob_centre": [
+          8.0,
+          8.0
+        ]
+      }
+    }
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {
+    "directory": "outputs/weak_scaling_rerun",
+    "write_field": false,
+    "snapshot_interval": 0
+  },
+  "metrics_csv": "results/raw/weak_scaling_rerun.csv"
+}

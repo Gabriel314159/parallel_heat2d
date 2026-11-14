@@ -31,8 +31,9 @@ The course asks for scaling tests up to at least 256 cores: experiments 1 and 5 
 - [hybrid_node.json](hybrid_node.json) splits the 64 cores of one node between ranks and threads, from 64 × 1 to 2 × 32, to tell the effect of mixing ranks and threads from the effect of crossing nodes in experiment 3.
 - 64 ranks on 1, 2 and 4 nodes (32 + 32, 16 + 16 and 8 + 8 per node), for the problem of experiment 1 and the block per rank of experiment 5, into `node_spread.csv`: it measures what leaving the node costs.
 - [gpu_size_512.json](gpu_size_512.json) to `gpu_size_4096.json` find where the GPU overtakes the CPU: one rank of 36 threads with one A40, and two ranks with two, against the same layouts on the CPU, at 512, 1024, 2048 and 4096 cells a side (100, 100, 20 and 10 steps). Compare the time per CG iteration.
+- [weak_scaling_rerun.json](weak_scaling_rerun.json) runs experiment 5 again with every point (the references and 1, 4, 9, 16, 36, 64, 144 and 256 ranks) in one job, `exp5_rerun.pbs`, into `weak_scaling_rerun.csv`: one commit, one build, the same nodes, and `poisson_sum_min_s` for every point.
 
-The jobs are in [hpc/jobs/](../hpc/jobs): `extra_multinode.pbs`, `extra_onenode.pbs`, `extra_threads.pbs`, `gpu_sizes.pbs` and `cpu_sizes.pbs`. From now on `poisson_sum_min_s` is also recorded; the CSVs of the first runs do not have this column.
+The jobs are in [hpc/jobs/](../hpc/jobs): `extra_multinode.pbs`, `extra_onenode.pbs`, `extra_threads.pbs`, `gpu_sizes.pbs`, `cpu_sizes.pbs` and `exp5_rerun.pbs`. From now on `poisson_sum_min_s` is also recorded; the CSVs of the first runs do not have this column.
 
 ## Order and repeated runs
 
