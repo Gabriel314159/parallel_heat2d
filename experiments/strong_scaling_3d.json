@@ -1,0 +1,26 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "model": "3d",
+  "defaults": "benchmark_problem_3d.json",
+  "description": "3D experiment 1: strong scaling over ranks for the 3D pigment. The fixed problem P3 on 1, 2, 4, ..., 256 MPI ranks with one thread each, pencil decomposition (x and y split, whole water columns per rank), blocking exchange, compared with heat3d_serial. Runs beyond one node fill each node before using the next.",
+  "execution": {"backend": "parallel"},
+  "decomposition": "pencils",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 1},
+    {"mpi_ranks": 2, "omp_threads": 1},
+    {"mpi_ranks": 4, "omp_threads": 1},
+    {"mpi_ranks": 8, "omp_threads": 1},
+    {"mpi_ranks": 16, "omp_threads": 1},
+    {"mpi_ranks": 32, "omp_threads": 1},
+    {"mpi_ranks": 64, "omp_threads": 1},
+    {"mpi_ranks": 128, "omp_threads": 1},
+    {"mpi_ranks": 256, "omp_threads": 1}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/strong_scaling_3d", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/strong_scaling_3d.csv"
+}

@@ -4,8 +4,13 @@
 Expands the file as experiments/README.md ("Run expansion") describes, runs each configuration
 warmup_runs + repetitions times, and appends one row per run (failed ones too) to its metrics_csv.
 
+An experiment file with "model": "3d" runs the 3D pigment model (heat3d_serial,
+heat3d_parallel; decompositions slabs and pencils) and records the columns of
+results/raw/metrics_columns_3d.csv.
+
 Example:
     python3 scripts/run_benchmarks.py --config experiments/strong_scaling_mpi.json --dry-run
+    python3 scripts/run_benchmarks.py --config experiments/strong_scaling_3d.json --dry-run
 """
 
 from __future__ import annotations
@@ -28,16 +33,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from heat2d_tools import REPO, deep_merge, load_json, parse_result, problem_args, resolve_base
+from heat2d_tools import MODELS, REPO, deep_merge, load_json, model_of, parse_result, problem_args, resolve_base
 
-COLUMNS_FILE = REPO / "results/raw/metrics_columns.csv"
-DECOMPOSITIONS = ("rows", "2d")
-# Backend -> executable.
-EXECUTABLES = {"serial": "heat_serial", "serial_omp": "heat_serial_omp", "parallel": "heat_parallel"}
+# The columns of the raw CSV files, per model.
+COLUMNS_FILES = {"2d": REPO / "results/raw/metrics_columns.csv", "3d": REPO / "results/raw/metrics_columns_3d.csv"}
+BACKENDS = ("serial", "serial_omp", "parallel")
 EXCHANGES = ("blocking", "overlap")
-# Columns taken from the configuration, so that error rows have them too.
-PROBLEM_COLUMNS = ("nx", "ny", "lx", "ly", "steps", "kappa", "viscosity", "wind", "wind_amplitude",
-                   "wind_alpha", "wind_period", "case")
+# Columns taken from the configuration, so that error rows have them too (a
+# column the model's CSV does not have is left out).
+PROBLEM_COLUMNS = ("nx", "ny", "nz", "lx", "ly", "lz", "steps", "kappa", "viscosity", "wind", "wind_amplitude",
+                   "wind_alpha", "wind_period", "case", "freeze_flow")
 # Placement and binding variables, recorded in session.json.
 RECORDED_ENVIRONMENT = ("OMP_PLACES", "OMP_PROC_BIND", "OMP_DISPLAY_AFFINITY", "OMP_NUM_THREADS",
                         "PBS_JOBID", "PBS_QUEUE", "PBS_NODEFILE", "SLURM_JOB_ID", "LOADEDMODULES",
@@ -51,29 +56,31 @@ def resolve_path(path: str | Path) -> Path:
     return p if p.is_absolute() else REPO / p
 
 
-def metric_columns() -> list[str]:
-    with COLUMNS_FILE.open(newline="") as handle:
+def metric_columns(model_name: str) -> list[str]:
+    with COLUMNS_FILES[model_name].open(newline="") as handle:
         return next(csv.reader(handle))
 
 
-def check_execution(name: str, execution: dict) -> None:
+def check_execution(name: str, execution: dict, model: dict) -> None:
     ranks, threads = execution.get("mpi_ranks"), execution.get("omp_threads")
     if any(type(x) is not int or x < 1 for x in (ranks, threads)):
         raise ValueError(f"{name}: mpi_ranks and omp_threads must be positive integers")
-    if execution["backend"] not in EXECUTABLES:
-        raise ValueError(f"{name}: backend must be one of {sorted(EXECUTABLES)}, not {execution['backend']!r}")
+    backends = [b for b in BACKENDS if b in model]
+    if execution["backend"] not in backends:
+        raise ValueError(f"{name}: backend must be one of {backends}, not {execution['backend']!r}")
     if execution["backend"] != "parallel":
         if (ranks, threads) != (1, 1):
-            raise ValueError(f"{name}: {EXECUTABLES[execution['backend']]} runs one rank and one thread")
+            raise ValueError(f"{name}: {model[execution['backend']]} runs one rank and one thread")
         return
-    if execution["decomposition"] not in DECOMPOSITIONS:
-        raise ValueError(f"{name}: decomposition must be one of {DECOMPOSITIONS}")
+    decompositions = model["decompositions"]
+    if execution["decomposition"] not in decompositions:
+        raise ValueError(f"{name}: decomposition must be one of {decompositions}")
     if execution["exchange"] not in EXCHANGES:
         raise ValueError(f"{name}: exchange must be one of {EXCHANGES}")
     grid = execution.get("process_grid")
     if grid is not None:
-        if execution["decomposition"] != "2d":
-            raise ValueError(f"{name}: a process_grid needs the 2d decomposition")
+        if execution["decomposition"] != decompositions[1]:
+            raise ValueError(f"{name}: a process_grid needs the {decompositions[1]} decomposition")
         py, px = grid
         if py * px != ranks:
             raise ValueError(f"{name}: process grid {py} x {px} does not match {ranks} ranks")
@@ -81,6 +88,7 @@ def check_execution(name: str, execution: dict) -> None:
 
 def configurations(experiment: dict, base: dict) -> list[tuple[str, dict]]:
     """The named configurations of an experiment file, in the order they run."""
+    model = MODELS[model_of(experiment)]
     kind = experiment["kind"]
     if kind == "correctness":
         raise ValueError("experiments/correctness.json is run by scripts/check_correctness.py")
@@ -110,7 +118,7 @@ def configurations(experiment: dict, base: dict) -> list[tuple[str, dict]]:
             problem["ly"] = problem["ny"] * experiment["spacing"]["dy"]
         e = config["execution"]
         name = f"p{e['mpi_ranks']}_t{e['omp_threads']}_{decomposition}_{exchange}"
-        check_execution(name, e)
+        check_execution(name, e, model)
         if kind == "strategies" and e["mpi_ranks"] * e["omp_threads"] != experiment["total_cores"]:
             raise ValueError(f"{name}: uses {e['mpi_ranks'] * e['omp_threads']} cores, "
                              f"not total_cores = {experiment['total_cores']}")
@@ -128,8 +136,8 @@ def configurations(experiment: dict, base: dict) -> list[tuple[str, dict]]:
             reference = copy.deepcopy(runs[0][1])
         else:
             reference = copy.deepcopy(base)
-        for index, (name, backend) in enumerate((("serial_reference", "serial"),
-                                                  ("serial_omp_reference", "serial_omp"))):
+        references = [("serial_reference", "serial"), ("serial_omp_reference", "serial_omp")]
+        for index, (name, backend) in enumerate([r for r in references if r[1] in model]):
             config = copy.deepcopy(reference)
             config["execution"] = {"backend": backend, "mpi_ranks": 1, "omp_threads": 1}
             runs.insert(index, (name, config))
@@ -162,11 +170,11 @@ def fill(token: str, values: dict[str, int], name: str) -> str:
     return PLACEHOLDER.sub(value, token)
 
 
-def command_for(name: str, config: dict, args: argparse.Namespace) -> list[str]:
+def command_for(name: str, config: dict, args: argparse.Namespace, model: dict) -> list[str]:
     """The command of one configuration, without --output."""
     problem, execution = config["problem"], config["execution"]
     serial = execution["backend"] != "parallel"
-    binary = Path(args.build_dir) / EXECUTABLES[execution["backend"]]
+    binary = Path(args.build_dir) / model[execution["backend"]]
     command = [str(binary), *problem_args(problem)]
     if not serial:
         command += ["--decomp", execution["decomposition"], "--exchange", execution["exchange"],
@@ -212,7 +220,7 @@ def git_commit() -> str:
     return head.stdout.strip() + ("-dirty" if status.stdout.strip() else "")
 
 
-def environment_record(build_dir: Path, commit: str) -> dict:
+def environment_record(build_dir: Path, commit: str, model: dict) -> dict:
     record = {"platform": platform.platform(), "hostname": platform.node(), "python": platform.python_version(),
               "logical_cpus": os.cpu_count(), "git_commit": commit,
               "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -223,7 +231,7 @@ def environment_record(build_dir: Path, commit: str) -> dict:
     if hasattr(os, "sched_getaffinity"):
         record["cpu_affinity"] = sorted(os.sched_getaffinity(0))
     record["binary_sha256"] = {}
-    for name in EXECUTABLES.values():
+    for name in (model[b] for b in BACKENDS if b in model):
         path = build_dir / name
         if path.is_file():
             record["binary_sha256"][name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -267,6 +275,8 @@ def check_result(result: dict, config: dict, nodes: int | None, args: argparse.N
         raise RuntimeError(f"benchmarks need a Release or RelWithDebInfo build, not {result['build_type']}")
     asked = {"mpi_ranks": execution["mpi_ranks"], "omp_threads": execution["omp_threads"],
              "nx": problem["nx"], "ny": problem["ny"], "steps": problem["steps"]}
+    if "nz" in problem:
+        asked["nz"] = problem["nz"]
     if execution["backend"] == "parallel":
         asked.update(decomposition=execution["decomposition"], exchange=execution["exchange"])
     if nodes is not None:
@@ -322,6 +332,8 @@ def main() -> int:
     if experiment.get("schema_version") != 5:
         raise ValueError(f"{experiment_path.name}: expected schema_version 5")
     base = resolve_base(experiment_path)
+    model_name = model_of(experiment)
+    model = MODELS[model_name]
     runs = configurations(experiment, base)
     if args.run:
         unknown = set(args.run) - {name for name, _ in runs}
@@ -336,14 +348,14 @@ def main() -> int:
         raise ValueError("--sockets-per-node needs --cores-per-node")
 
     # All commands first, so that a bad placeholder stops the plan here.
-    commands = {name: command_for(name, config, args) for name, config in runs}
+    commands = {name: command_for(name, config, args, model) for name, config in runs}
     session = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     out = resolve_path(base["output"]["directory"]) / session
     out.mkdir(parents=True, exist_ok=False)
     csv_path = resolve_path(args.metrics_csv or experiment["metrics_csv"])
     commit = git_commit()
-    metadata = environment_record(Path(args.build_dir), commit)
-    metadata.update(config_file=str(experiment_path), kind=experiment["kind"], session_id=session,
+    metadata = environment_record(Path(args.build_dir), commit, model)
+    metadata.update(config_file=str(experiment_path), kind=experiment["kind"], model=model_name, session_id=session,
                     metrics_csv=str(csv_path), options=vars(args), repetitions=repetitions, warmup_runs=warmups,
                     runs=[{"name": name, "command": commands[name], **config} for name, config in runs])
     save_json(out / "session.json", metadata)
@@ -361,7 +373,7 @@ def main() -> int:
         if e["mpi_ranks"] * e["omp_threads"] > available:
             raise ValueError(f"{name} needs {e['mpi_ranks'] * e['omp_threads']} cores; {available} are available "
                              "(--allocated-cores)")
-    needed = {EXECUTABLES[config["execution"]["backend"]] for _, config in runs}
+    needed = {model[config["execution"]["backend"]] for _, config in runs}
     for binary in sorted(needed):
         if not (Path(args.build_dir) / binary).is_file():
             raise FileNotFoundError(f"{Path(args.build_dir) / binary} not found; build first (Release)")
@@ -369,13 +381,14 @@ def main() -> int:
         if shutil.which(args.launcher) is None:
             raise FileNotFoundError(f"MPI launcher not found: {args.launcher}")
 
-    columns = metric_columns()
+    columns = metric_columns(model_name)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     existed = csv_path.is_file() and csv_path.stat().st_size > 0
     if existed:
         with csv_path.open(newline="") as handle:
             if next(csv.reader(handle)) != columns:
-                raise ValueError(f"{csv_path} has other columns than {COLUMNS_FILE.name}; choose a new metrics_csv")
+                raise ValueError(f"{csv_path} has other columns than {COLUMNS_FILES[model_name].name}; "
+                                 "choose a new metrics_csv")
 
     failures = 0
     with csv_path.open("a", newline="") as handle:

@@ -23,6 +23,16 @@ gate() {
     tail -1 "$BUILD.gate.log"
 }
 
+# The same gate for the 3D pigment model (experiments/correctness_3d.json).
+gate3d() {
+    (unset OMP_PLACES OMP_PROC_BIND
+     python3 scripts/check_correctness.py --experiment experiments/correctness_3d.json --build-dir "$BUILD" \
+         --output-dir "outputs/gate3d_$PBS_JOBID" \
+         --launcher "$MPIRUN --oversubscribe --bind-to none -n {ranks}") > "$BUILD.gate3d.log" 2>&1 ||
+        { echo "3D correctness gate failed, see $BUILD.gate3d.log"; exit 1; }
+    tail -1 "$BUILD.gate3d.log"
+}
+
 RUN=(python3 scripts/run_benchmarks.py --build-dir "$BUILD" --launcher "$MPIRUN" --launch-serial --require-binding
      --allocated-cores "$(wc -l < "$PBS_NODEFILE")" --timeout "${HEAT2D_TIMEOUT:-3600}" --mpi-arg=--report-bindings
      --mpi-arg=-x --mpi-arg=OMP_PLACES --mpi-arg=-x --mpi-arg=OMP_PROC_BIND)

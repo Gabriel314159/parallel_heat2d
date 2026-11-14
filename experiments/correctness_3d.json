@@ -1,0 +1,89 @@
+{
+  "schema_version": 5,
+  "kind": "correctness",
+  "model": "3d",
+  "defaults": "../config/defaults.json",
+  "description": "Experiment 0 for the 3D pigment model (docs/design_3d.md, model A): small 3D fields checked against the serial reference heat3d_serial, cell by cell over the whole 3D field, with the computed wind-driven flow (the 2D flow, the same in every layer), no-flux walls on all six sides and an uneven number of layers. The flow settings are those of experiments/correctness.json. Run with scripts/check_correctness.py --experiment experiments/correctness_3d.json.",
+  "checks": {
+    "serial_parallel_atol": 1e-10,
+    "serial_parallel_rtol": 1e-10,
+    "mass_conservation_rtol": 1e-12,
+    "constant_field_invariance": true,
+    "cosine_decay_discrete_rtol": 1e-12,
+    "analytical_error_reported_separately": true
+  },
+  "problem": {"blob_width": 0.15, "blob_centre": [0.3, 0.5], "viscosity": 0.02, "wind_amplitude": 4.96, "max_speed": 2.0, "spinup": 1.0, "check_interval": 10, "nz": 5, "lz": 0.2, "blob_z": 0.08},
+  "output": {"directory": "outputs/correctness_3d", "write_field": true, "snapshot_interval": 0},
+  "runs": [
+    {
+      "name": "pigment_one_rank",
+      "problem": {"nx": 32, "ny": 24, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 1, "omp_threads": 1, "decomposition": "slabs", "exchange": "blocking"}
+    },
+    {
+      "name": "mpi_only_slabs",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 3, "omp_threads": 1, "decomposition": "slabs", "exchange": "blocking"}
+    },
+    {
+      "name": "mpi_only_pencils",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 6, "omp_threads": 1, "decomposition": "pencils", "exchange": "blocking", "process_grid": [2, 3]}
+    },
+    {
+      "name": "openmp_only",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 1, "omp_threads": 4, "decomposition": "slabs", "exchange": "blocking"}
+    },
+    {
+      "name": "uneven_slabs_overlap",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 3, "omp_threads": 2, "decomposition": "slabs", "exchange": "overlap"}
+    },
+    {
+      "name": "uneven_pencils_blocking",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 6, "omp_threads": 2, "decomposition": "pencils", "exchange": "blocking", "process_grid": [2, 3]}
+    },
+    {
+      "name": "uneven_pencils_overlap",
+      "problem": {"nx": 37, "ny": 29, "steps": 40},
+      "execution": {"backend": "parallel", "mpi_ranks": 6, "omp_threads": 2, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 3]}
+    },
+    {
+      "name": "periodic_wind_pencils_overlap",
+      "problem": {"nx": 37, "ny": 29, "steps": 40, "wind": "periodic", "wind_alpha": 0.5, "wind_period": 0.5},
+      "execution": {"backend": "parallel", "mpi_ranks": 6, "omp_threads": 2, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 3]}
+    },
+    {
+      "name": "frozen_flow_pencils_overlap",
+      "problem": {"nx": 37, "ny": 29, "steps": 40, "freeze_flow": true},
+      "execution": {"backend": "parallel", "mpi_ranks": 4, "omp_threads": 2, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 2]}
+    },
+    {
+      "name": "column_blob_slabs",
+      "problem": {"nx": 37, "ny": 29, "steps": 40, "blob_z": "column"},
+      "execution": {"backend": "parallel", "mpi_ranks": 3, "omp_threads": 2, "decomposition": "slabs", "exchange": "overlap"}
+    },
+    {
+      "name": "single_layer_pencils",
+      "problem": {"nx": 37, "ny": 29, "steps": 40, "nz": 1},
+      "execution": {"backend": "parallel", "mpi_ranks": 4, "omp_threads": 1, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 2]}
+    },
+    {
+      "name": "small_local_blocks_overlap",
+      "problem": {"nx": 3, "ny": 3, "steps": 8, "nz": 2},
+      "execution": {"backend": "parallel", "mpi_ranks": 4, "omp_threads": 1, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 2]}
+    },
+    {
+      "name": "constant_field",
+      "problem": {"nx": 31, "ny": 23, "steps": 30, "nz": 4, "case": "constant", "background": 42.0},
+      "execution": {"backend": "parallel", "mpi_ranks": 4, "omp_threads": 2, "decomposition": "pencils", "exchange": "overlap", "process_grid": [2, 2]}
+    },
+    {
+      "name": "cosine_decay",
+      "problem": {"nx": 20, "ny": 16, "nz": 12, "lz": 0.5, "steps": 40, "case": "cosine_decay", "amplitude": 1.0, "wind_amplitude": 0.0, "max_speed": 0.0, "spinup": 0.0, "kappa": 0.001},
+      "execution": {"backend": "parallel", "mpi_ranks": 4, "omp_threads": 2, "decomposition": "pencils", "exchange": "blocking", "process_grid": [2, 2]}
+    }
+  ]
+}

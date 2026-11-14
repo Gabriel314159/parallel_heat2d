@@ -43,6 +43,19 @@ Some configurations appear in more than one file: both serial references and the
 
 The grid is fixed at 1024 × 1024 cells; the number of steps is provisional. A serial run of 100 steps takes about 8 minutes on a laptop. Time one run on Vanda, then adjust `steps` in this one file.
 
+## The 3D pigment model
+
+Model A of [docs/design_3d.md](../docs/design_3d.md) (the 3D pigment in the 2D flow) has its own correctness gate and three experiments. Each of these files sets `"model": "3d"`, which makes `scripts/check_correctness.py` and `scripts/run_benchmarks.py` run `heat3d_serial` and `heat3d_parallel`, accept the decompositions `slabs` and `pencils`, and write the columns of [results/raw/metrics_columns_3d.csv](../results/raw/metrics_columns_3d.csv).
+
+| File | Question | What changes |
+| --- | --- | --- |
+| [correctness_3d.json](correctness_3d.json) | Does every 3D parallel configuration replicate the 3D serial answer? | slabs or pencils, blocking or overlap, ranks and threads; one layer, a depth-independent drop, the frozen flow, constant field, cosine decay |
+| [strong_scaling_3d.json](strong_scaling_3d.json) | How much faster do more ranks make $P_3$? | ranks: 1 to 256, one thread each, pencils, blocking |
+| [communication_3d.json](communication_3d.json) | Do the decomposition and the exchange mode matter when every face is 64 layers deep? | slabs or pencils; blocking or overlap; 256 ranks |
+| [weak_scaling_3d.json](weak_scaling_3d.json) | Does the time stay the same with 256 × 256 × 64 cells per rank? | ranks: 1, 4, 16, 64, 256 (the basin grows in $x$ and $y$) |
+
+$P_3$ ([benchmark_problem_3d.json](benchmark_problem_3d.json)) is $P$ with 64 layers over a depth of 0.0625, so 67 million cubic cells, the blob at mid-depth, and the flow frozen from rest (`freeze_flow`): no Poisson solve runs in the timed loop, which then measures the 3D pigment update and its halo exchanges. The 3D problem keys are `nz`, `lz`, `blob_z` (a depth, or `"column"`) and `freeze_flow` (`true` or `false`); `execution.decomposition` is `slabs` or `pencils`. The jobs are `hpc/jobs/exp3d_one_node.pbs` and `hpc/jobs/exp3d_four_nodes.pbs`.
+
 ## File format
 
 - Every file has `schema_version` 5, the same number as [config/defaults.json](../config/defaults.json). 

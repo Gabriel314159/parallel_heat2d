@@ -36,7 +36,19 @@ endif()
 add_executable(heat_serial src/serial/main.cpp src/serial/solver.cpp)
 target_link_libraries(heat_serial PRIVATE heat2d_common)
 
-set(HEAT2D_TARGETS heat2d_common heat_serial)
+# The 3D pigment model (docs/design_3d.md, "Model A"): the 3D pigment in the
+# 2D flow. Its shared parts add to heat2d_common; no MPI or OpenMP.
+add_library(heat3d_common STATIC
+    src/common3d/config3d.cpp
+    src/common3d/physics3d.cpp
+    src/common3d/io3d.cpp
+)
+target_link_libraries(heat3d_common PUBLIC heat2d_common)
+
+add_executable(heat3d_serial src/serial3d/main.cpp src/serial3d/solver.cpp)
+target_link_libraries(heat3d_serial PRIVATE heat3d_common)
+
+set(HEAT2D_TARGETS heat2d_common heat_serial heat3d_common heat3d_serial)
 
 if(HEAT2D_ENABLE_OPENMP)
     # Apple's clang has no OpenMP runtime of its own; use Homebrew's libomp if present.
@@ -96,6 +108,16 @@ elseif(HEAT2D_ENABLE_MPI AND HEAT2D_PARALLEL_READY)
         endif()
     endif()
     list(APPEND HEAT2D_TARGETS heat_parallel)
+
+    # heat3d_parallel: the 3D pigment model over MPI + OpenMP (slabs or pencils).
+    add_executable(heat3d_parallel src/parallel3d/main.cpp src/parallel3d/solver.cpp src/parallel3d/halo3d.cpp
+                   src/parallel/decomposition.cpp src/parallel/halo.cpp)
+    target_link_libraries(heat3d_parallel PRIVATE heat3d_common MPI::MPI_CXX)
+    if(HEAT2D_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+        target_link_libraries(heat3d_parallel PRIVATE OpenMP::OpenMP_CXX)
+        target_compile_definitions(heat3d_parallel PRIVATE HEAT2D_USE_OPENMP=1)
+    endif()
+    list(APPEND HEAT2D_TARGETS heat3d_parallel)
 endif()
 
 # GPU build: the CG of heat_parallel on an A40 (docs/design.md). Empty
@@ -133,6 +155,12 @@ if(HEAT2D_BUILD_TESTS)
     add_test(NAME serial_solver COMMAND test_serial_solver)
     list(APPEND HEAT2D_TARGETS test_serial_solver)
 
+    # The 3D pigment model against the 2D solver and its analytic references.
+    add_executable(test_3d tests/test_3d.cpp src/serial/solver.cpp src/serial3d/solver.cpp)
+    target_link_libraries(test_3d PRIVATE heat3d_common)
+    add_test(NAME serial_3d COMMAND test_3d)
+    list(APPEND HEAT2D_TARGETS test_3d)
+
     # End-to-end checks through the command-line interface (scripts/check_correctness.py).
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
@@ -140,6 +168,12 @@ if(HEAT2D_BUILD_TESTS)
                  COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"
                          --serial-only --build-dir "${CMAKE_BINARY_DIR}"
                          --output-dir "${CMAKE_BINARY_DIR}/correctness"
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        add_test(NAME correctness_3d_serial
+                 COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"
+                         --experiment "${CMAKE_CURRENT_SOURCE_DIR}/experiments/correctness_3d.json"
+                         --serial-only --build-dir "${CMAKE_BINARY_DIR}"
+                         --output-dir "${CMAKE_BINARY_DIR}/correctness_3d"
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         # Serial vs parallel comparisons; needs up to 6 MPI ranks. Extra launcher
         # flags (e.g. --oversubscribe on a small machine) go in HEAT2D_MPIEXEC_FLAGS.
@@ -153,6 +187,18 @@ if(HEAT2D_BUILD_TESTS)
                 add_test(NAME halo_${HEAT2D_RANKS}_ranks
                          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${HEAT2D_RANKS} ${HEAT2D_MPIEXEC_FLAGS}
                                  $<TARGET_FILE:test_halo>)
+            endforeach()
+
+            # The 3D pigment halos (slabs and pencils, blocking and overlapping).
+            add_executable(test_halo3d tests/test_halo3d.cpp src/parallel/decomposition.cpp src/parallel3d/halo3d.cpp)
+            target_link_libraries(test_halo3d PRIVATE heat3d_common MPI::MPI_CXX)
+            if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+                target_compile_options(test_halo3d PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+            endif()
+            foreach(HEAT2D_RANKS 1 4 6)
+                add_test(NAME halo3d_${HEAT2D_RANKS}_ranks
+                         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${HEAT2D_RANKS} ${HEAT2D_MPIEXEC_FLAGS}
+                                 $<TARGET_FILE:test_halo3d>)
             endforeach()
             set(HEAT2D_MPIEXEC_FLAGS "" CACHE STRING "Extra flags for mpiexec in the parallel correctness test")
 
@@ -181,6 +227,13 @@ if(HEAT2D_BUILD_TESTS)
                      COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"
                              --build-dir "${CMAKE_BINARY_DIR}"
                              --output-dir "${CMAKE_BINARY_DIR}/correctness"
+                             --launcher "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} {ranks} ${HEAT2D_MPIEXEC_FLAGS}"
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME correctness_3d_parallel
+                     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_correctness.py"
+                             --experiment "${CMAKE_CURRENT_SOURCE_DIR}/experiments/correctness_3d.json"
+                             --build-dir "${CMAKE_BINARY_DIR}"
+                             --output-dir "${CMAKE_BINARY_DIR}/correctness_3d"
                              --launcher "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} {ranks} ${HEAT2D_MPIEXEC_FLAGS}"
                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         endif()

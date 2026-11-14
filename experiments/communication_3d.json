@@ -1,0 +1,18 @@
+{
+  "schema_version": 5,
+  "kind": "strategies",
+  "model": "3d",
+  "defaults": "benchmark_problem_3d.json",
+  "description": "3D experiment 4: communication strategy for the 3D pigment. P3 on 256 ranks x 1 thread, on several nodes, with slabs (y split: 1024 x 4 x 64 cells per rank, two faces of 1024 x 64) or pencils (16 x 16 process grid: 64 x 64 x 64 cells per rank, four faces of 64 x 64), and blocking or overlapping halo exchange (four runs). Every face is a whole slab of water, 64 layers deep, so a step sends 64 times the values of the 2D pigment exchange; with the flow frozen, these exchanges are all the communication of the timed loop (pigment_halo_s).",
+  "execution": {"backend": "parallel"},
+  "total_cores": 256,
+  "resources": [
+    {"mpi_ranks": 256, "omp_threads": 1}
+  ],
+  "decompositions": ["slabs", "pencils"],
+  "exchanges": ["blocking", "overlap"],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/communication_3d", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/communication_3d.csv"
+}
