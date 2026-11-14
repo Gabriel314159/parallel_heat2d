@@ -2,7 +2,7 @@
   "schema_version": 5,
   "kind": "strong_scaling",
   "defaults": "benchmark_problem.json",
-  "description": "Serial runtime against problem size: the benchmark problem on 512 x 512 cells of the 1 x 1 basin, 100 steps, run by the pure serial program on one core. experiments/serial_size_*.json differ only in the size and the steps (fewer on the large grids to keep the runs short); compare the time per CG iteration. The domain is fixed, so dx and the automatic dt shrink with the grid. The parallel entry is a placeholder: hpc/jobs/serial_sizes.pbs runs only the references (--run serial_reference).",
+  "description": "Serial runtime against problem size: the benchmark problem on 512 x 512 cells of the 1 x 1 basin, 100 steps, run by the pure serial program on one core. experiments/serial_size_*.json differ only in the size; compare the time per CG iteration. The domain is fixed, so dx and the automatic dt shrink with the grid. The parallel entry is a placeholder: hpc/jobs/serial_sizes.pbs runs only the references (--run serial_reference).",
   "problem": {
     "nx": 512,
     "ny": 512,

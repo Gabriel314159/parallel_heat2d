@@ -3,10 +3,10 @@
 #PBS -N heat2d_serial_sz
 #PBS -l select=1:ncpus=72:mpiprocs=72
 #PBS -l place=excl
-#PBS -l walltime=01:30:00
+#PBS -l walltime=01:00:00
 #PBS -j oe
-# Serial runtime against problem size (experiments/serial_size_*.json): heat_serial on one core
-# at 256^2 to 2048^2. The 4096^2 point is serial_size_4096.pbs, on its own node.
+# Serial runtime against problem size (experiments/serial_size_*.json, 100 steps): heat_serial
+# on one core at 256^2, 512^2 and 1024^2. 2048^2 and 4096^2 have a job each.
 
 HEAT2D_TIMEOUT=1800
 source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
@@ -14,6 +14,4 @@ gate
 for size in 256 512; do
     run --config "experiments/serial_size_$size.json" "${CORE[@]}" --run serial_reference
 done
-for size in 1024 2048; do
-    run --config "experiments/serial_size_$size.json" --repetitions 3 "${CORE[@]}" --run serial_reference
-done
+run --config experiments/serial_size_1024.json --repetitions 3 "${CORE[@]}" --run serial_reference
