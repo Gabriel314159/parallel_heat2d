@@ -13,7 +13,7 @@
 
 ## Requirements
 
-- `check_correctness.py` and `run_benchmarks.py` use only the Python standard library (Python 3.9+), so they run wherever the solver does. CTest runs `check_correctness.py` as the `correctness_serial` and `correctness_parallel` tests.
+- `check_correctness.py` and `run_benchmarks.py` use only the Python standard library (Python 3.9+), so they run wherever the solver does. CTest runs `check_correctness.py` as the `correctness_serial` and `correctness_parallel` tests, and on `experiments/correctness_3d.json` as `correctness_3d_serial` and `correctness_3d_parallel`. An experiment file with `"model": "3d"` selects the 3D programs in both scripts (`MODELS` in `heat2d_tools.py`). `plot_field.py` also draws the vertical sections of 3D snapshots (`section_*.npy`).
 - The plotting scripts need NumPy and Matplotlib 3.6+: `python3 -m pip install -r requirements.txt`. MP4 output also needs `ffmpeg`.
 - Build the solver first: `cmake -S . -B build && cmake --build build`. The scripts look for it in `build/` (option `--build-dir`).
 
@@ -26,6 +26,10 @@ python3 scripts/check_correctness.py --launcher "mpiexec --oversubscribe -n {ran
 
 # A performance experiment: first the plan (configurations and commands), then the runs
 python3 scripts/run_benchmarks.py --config experiments/strong_scaling_mpi.json --dry-run
+
+# The 3D pigment model: the files with "model": "3d" run heat3d_serial and heat3d_parallel
+python3 scripts/check_correctness.py --experiment experiments/correctness_3d.json
+python3 scripts/run_benchmarks.py --config experiments/strong_scaling_3d.json --dry-run
 python3 scripts/run_benchmarks.py --config experiments/strong_scaling_mpi.json --run serial_reference --run p4_t1_2d_blocking
 
 # Snapshots: pigment, psi and vorticity every 500 steps

@@ -12,6 +12,7 @@ Implemented and tested:
 - The serial solver `heat_serial` and the MPI + OpenMP solver `heat_parallel` (row and 2D decompositions, blocking and overlapping halo exchange). On every correctness case, `heat_parallel` agrees with the serial result to within about $5\times10^{-14}$, flow included. The match is not bit for bit, because the global sums of the Poisson solver add the ranks' contributions in a different order.
 - Unit tests ([tests/](tests/), run with `ctest`) and [scripts/check_correctness.py](scripts/check_correctness.py): mass conservation, constant fields under the flow, the exact discrete cosine-decay solution, and serial/parallel comparisons.
 - [scripts/plot_field.py](scripts/plot_field.py) and [scripts/animate_field.py](scripts/animate_field.py) for pictures and animations of the pigment.
+- The 3D pigment model (model A of [docs/design_3d.md](docs/design_3d.md)): the pigment in a basin with depth, carried by the same 2D flow in every layer, in `heat3d_serial` and `heat3d_parallel` (slab and pencil decompositions, blocking and overlapping exchange). With one layer, or with a field that does not change with depth, every layer reproduces the 2D pigment exactly. Its correctness cases are in [experiments/correctness_3d.json](experiments/correctness_3d.json) and its experiments are `experiments/*_3d.json`.
 
 Not implemented yet:
 
@@ -81,8 +82,22 @@ Both solvers take the same options; `heat_parallel` adds `--decomp rows|2d`, `--
 | `heat_parallel --decomp 2d` | Two-dimensional MPI process grid (`--py`, `--px`, or chosen automatically). |
 | `heat_parallel --exchange blocking` | Halo exchange with all messages posted at once and one wait, then the update. |
 | `heat_parallel --exchange overlap` | Nonblocking halo exchanges: the interior of the pigment update and of the CG's $Ap$ is computed while messages travel. |
+| `heat3d_serial`, `heat3d_parallel` | The 3D pigment in the 2D flow (below). |
 
 Threads per rank: `--threads N`, otherwise `OMP_NUM_THREADS`, otherwise 1 (so a run with neither is MPI-only). `heat_serial` accepts only `--threads 1`. The run report and the `RESULT` line state the ranks, threads and nodes actually used, and on Linux the fewest cores any rank may run on (`cores_per_rank`) and whether every thread is bound to a physical core of its own (`binding` is `cores`). The solver warns when a rank has fewer cores than threads, which means the launcher bound it too tightly, and when threads are not bound one to each core, for example two on the hardware threads of one core; see "Binding" in [hpc/README.md](hpc/README.md). If anything fails, every rank prints its message and the job is stopped with `MPI_Abort`; Open MPI adds its own abort banner. A single-rank run of `heat_parallel` still includes MPI setup and is not the pure serial reference.
+
+### The 3D pigment model
+
+`heat3d_serial` and `heat3d_parallel` take every option of the 2D solvers and add the depth: `--nz` layers (default 32) over `--lz` (default 0.125, so the default cells are cubes), the depth of the blob centre `--blob-z` (default mid-depth; `column` puts the 2D drop in every layer), and `--freeze-flow`, which advances the flow during the spin-up only. `--decomp` takes `slabs` (split $y$) or `pencils` (split $x$ and $y$); every rank keeps whole columns of water. See [docs/design_3d.md](docs/design_3d.md), "Model A".
+
+```bash
+./build/heat3d_serial --nx 64 --ny 64 --nz 16 --lz 0.25 --steps 200 --output outputs/final3d.npy
+OMP_NUM_THREADS=2 mpiexec -n 4 ./build/heat3d_parallel --nx 64 --ny 64 --nz 16 --lz 0.25 --steps 200 \
+    --decomp pencils --exchange overlap --output outputs/final3d_parallel.npy
+python3 scripts/check_correctness.py --experiment experiments/correctness_3d.json
+```
+
+With `--output`, the whole field is written (`.npy` of shape `(nz, ny, nx)`, or CSV with `nz × ny` rows, surface layer first). Snapshots hold the surface layer as `field_*.npy`, so `plot_field.py` and `animate_field.py` work unchanged, and a vertical section through the blob as `section_*.npy` (`plot_field.py` draws it too). The `RESULT` line adds `nz`, `lz`, `flow` and the time of the pigment updates and of their halo exchanges (`pigment_s`, `pigment_halo_s`).
 
 ## Preview the dynamics
 
@@ -124,7 +139,7 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 
 | Path | Contents |
 | --- | --- |
-| [src/](src/README.md) | C++ sources: shared components (`common/`), serial solver (`serial/`), MPI + OpenMP solver (`parallel/`). |
+| [src/](src/README.md) | C++ sources: shared components (`common/`), serial solver (`serial/`), MPI + OpenMP solver (`parallel/`), and the 3D pigment model (`common3d/`, `serial3d/`, `parallel3d/`). |
 | [tests/](tests/) | C++ unit tests, run by `ctest`. |
 | [scripts/](scripts/README.md) | Correctness checks, plotting and animation; planned benchmark tools. |
 | [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
@@ -133,6 +148,7 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 | [results/raw/](results/raw/README.md) | Measured benchmark CSV files, when available. |
 | [results/figures/](results/figures/README.md) | Selected figures generated from measured data. |
 | [docs/design.md](docs/design.md) | Numerical and software design decisions. |
+| [docs/design_3d.md](docs/design_3d.md) | The 3D models: model A (3D pigment in the 2D flow, implemented) and model B (3D flow, proposal). |
 | [docs/experiment_plan.md](docs/experiment_plan.md) | Correctness checks and fair timing conventions. |
 | [docs/ai_usage.md](docs/ai_usage.md) | Record of AI assistance and subsequent verification. |
 | [docs/references.md](docs/references.md) | Technical references. |

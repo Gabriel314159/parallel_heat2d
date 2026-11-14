@@ -51,6 +51,19 @@ Case requirements:
 
 The top row of exported matrices corresponds to the cell row next to the top wall (`y=ly`).
 
+## 3D parameters
+
+`heat3d_serial` and `heat3d_parallel` (model A of `docs/design_3d.md`) take every problem parameter above, with the same meaning, and these:
+
+| JSON field | CLI | Meaning |
+| --- | --- | --- |
+| `problem.nz` | `--nz` | Layers (default 32). Layer 1 is at the surface, $z = l_z$. |
+| `problem.lz` | `--lz` | Depth (default 0.125, so that the default cells are cubes). $\Delta z = l_z/n_z$. |
+| `problem.blob_z` | `--blob-z` | Depth of the `pigment_drop` centre (default $l_z/2$), or `column`: the 2D drop in every layer, a field that does not change with depth. |
+| `problem.freeze_flow` | `--freeze-flow` | `true`: advance the flow during the spin-up only; the pigment then moves in that fixed flow and no Poisson solve runs in the timed loop. |
+
+`execution.decomposition` is `slabs` (split $y$, like `rows`) or `pencils` (split $x$ and $y$, like `2d`; `process_grid` applies); $z$ is never split. With `--output`, the whole 3D field is written: CSV with $n_z n_y$ rows of $n_x$ values, layer by layer from the surface, or `.npy` of shape $(n_z, n_y, n_x)$. The pigment limit of the time step includes $2\kappa/\Delta z^2$.
+
 ## Execution parameters
 
 These apply to the parallel solver, `heat_parallel`; `heat_serial` ignores them with a note.

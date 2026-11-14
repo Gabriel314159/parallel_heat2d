@@ -1,8 +1,157 @@
-# Three-dimensional model: design proposal
+# Three-dimensional model
 
-**Status:** proposal for review, 3 November 2026. Nothing here is implemented. The decisions still open are listed at the end; until they are settled, the 2D model of `design.md` stays the model we measure.
+**Status, 14 November 2026.** The extension to three dimensions is done in two steps.
+
+- **Model A, implemented:** the pigment in three dimensions, carried by the 2D wind-driven flow of `design.md`, the same in every layer and with no vertical velocity. Programs `heat3d_serial` and `heat3d_parallel`; see the next section.
+- **Model B, proposal of 3 November, not implemented:** the 3D flow with a projection method, the 3D pressure Poisson equation and the GPU offload. It is described from "Why and what" to the end of this document, and its decisions are still open.
+
+## Model A: the 3D pigment in the 2D flow (implemented)
+
+### What it is
+
+The pigment fills the basin $[0,l_x]\times[0,l_y]\times[0,l_z]$ and obeys the 3D advection–diffusion equation
+
+$$
+\frac{\partial c}{\partial t} + \nabla\cdot(\mathbf u c) = \kappa\nabla^2 c,
+\qquad
+\mathbf u = \big(u(x,y,t),\ v(x,y,t),\ 0\big),
+$$
+
+where $u$ and $v$ are the 2D wind-driven flow of `design.md`, computed exactly as in `heat_serial` and `heat_parallel`. The flow is the same in every layer and has no vertical velocity. Its divergence is $\partial u/\partial x + \partial v/\partial y = 0$, as in 2D, so every property of the 2D pigment carries over: the total pigment is conserved, a constant field stays constant, and no new extrema appear. Vertically, the pigment only diffuses.
+
+Model A gives the parallel parts of the 3D problem (a 3D field, a seven-point stencil, faces that are 2D slabs, decompositions of a 3D grid) with the flow code and its Poisson solver unchanged. Model B would add the 3D flow on top.
+
+### Grid and storage
+
+The grid is cell-centred, as in 2D, with a third index for the layer: $(k, i, j)$ = (layer, row, column). The layer $k$ counts down from the surface, as the row $i$ counts down from the north wall, so the centre of cell $(k,i,j)$ is at
+
+$$
+x = (j-\tfrac12)\Delta x, \qquad y = l_y - (i-\tfrac12)\Delta y, \qquad z = l_z - (k-\tfrac12)\Delta z,
+\qquad \Delta z = l_z/n_z .
+$$
+
+`Field3D` (`src/common3d/field3d.hpp`) stores one block with a ghost layer on all six sides in one array, layer by layer and row by row, with $x$ fastest. So `row(k, i)[j]` walks along $x$ exactly as `Field::row(i)[j]` does in 2D. The face velocities stay the 2D `FaceVelocities`, read by every layer.
+
+The defaults keep the 2D grid (256 × 256 cells on 1 × 1) and add $n_z = 32$ layers over $l_z = 0.125$, so the cells are cubes.
+
+### Pigment update
+
+The 2D update gains the fluxes through the top and bottom faces:
+
+$$
+c^{n+1}_{k,i,j} = c^n_{k,i,j}
+- \frac{\Delta t}{\Delta x}\big(F_{k,i,j} - F_{k,i,j-1}\big)
+- \frac{\Delta t}{\Delta y}\big(G_{k,i,j} - G_{k,i+1,j}\big)
+- \frac{\Delta t}{\Delta z}\big(H^{\text{top}}_{k,i,j} - H^{\text{top}}_{k+1,i,j}\big).
+$$
+
+$F$ and $G$ are the fluxes of the 2D update (`face_flux` of `common/stencil.hpp`, through the east and north faces), and $H^{\text{top}}_{k,i,j}$ is the flux through the top face of cell $(k,i,j)$, positive upwards. It is again `face_flux`, with the cell below the face on its minus side and $w = 0$:
+
+$$
+H^{\text{top}}_{k,i,j} = 0\cdot c_{k-1,i,j} - \frac{\kappa}{\Delta z}\big(c_{k-1,i,j} - c_{k,i,j}\big).
+$$
+
+`update_cell_3d` (`src/common3d/stencil3d.hpp`) takes $w$ as an argument, so a 3D flow could use it; model A passes 0. Both cells that share a face compute its flux with the same arguments in the same order, so the total pigment is conserved to rounding, as in 2D.
+
+**Walls.** All six walls are no-flux. The ghosts across them mirror the interior: the four side walls of a block, layer by layer, as `fill_wall_ghosts` does in 2D, and the surface and the bottom, which every block touches (`fill_wall_ghosts_3d` in `src/common3d/physics3d.cpp`).
+
+**Reduction to 2D.** When the layers above and below hold the same value as the cell (one layer between two mirrored ghosts, or a field that does not change with depth), both vertical fluxes are exactly zero, and the new value equals the 2D update exactly. So a 3D run with one layer, or with the 2D drop in every layer (`--blob-z column`), must reproduce the 2D pigment exactly in every layer; `tests/test_3d.cpp` checks this.
+
+### Initial conditions
+
+- `pigment_drop`: a 3D Gaussian, $c_0 + A_0\exp\!\big(-|\mathbf r - \mathbf r_0|^2/(2\sigma^2)\big)$, centred at $(x_0, y_0, z_0)$ with $z_0$ = `--blob-z` (default $l_z/2$). With `--blob-z column`, the 2D drop in every layer.
+- `constant`: $c_0$.
+- `cosine_decay`: $A_0\cos(\pi x/l_x)\cos(\pi y/l_y)\cos(\pi z/l_z)$, without wind. It is an exact eigenvector of the scheme, with
+  $$
+  \lambda = 4\kappa\left(\frac{\sin^2(\pi\Delta x/2l_x)}{\Delta x^2} + \frac{\sin^2(\pi\Delta y/2l_y)}{\Delta y^2} + \frac{\sin^2(\pi\Delta z/2l_z)}{\Delta z^2}\right),
+  $$
+  so after $n$ steps the field is $(1-\lambda\Delta t)^n$ times the initial one.
+
+### Time step
+
+The rules of `design.md` with the vertical diffusion added to the pigment limit:
+
+$$
+a = \frac{u_{\max}}{\Delta x} + \frac{v_{\max}}{\Delta y},
+\qquad
+d = 2\kappa\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2} + \frac{1}{\Delta z^2}\right),
+\qquad
+n = \nu\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right),
+$$
+
+with $\Delta t\,(a+d) \le 1$, $\Delta t\,a \le 0.5$ and $\Delta t\,n \le 0.1$. There is no vertical velocity, and the flow, hence its viscous limit, stays 2D. Only the pigment limit is tighter than in 2D, so the 3D step is never larger than the 2D step for the same $x$-$y$ grid.
+
+### The flow, live or frozen
+
+Each step advances the 2D flow exactly as in 2D: the same code (`SerialFlow` in `src/serial/serial_flow.hpp`, `ParallelFlow` in `src/parallel/parallel_flow.hpp`, moved there from the 2D solvers unchanged), with one 2D Poisson solve.
+
+With `--freeze-flow`, the flow is advanced only during the spin-up, and the pigment then moves in that fixed flow. No Poisson solve runs in the timed loop, which then measures the 3D pigment alone. This is what the 3D experiments use: with the flow live, the 2D CG, already measured in experiments 1 to 5, takes most of the time again.
+
+### Decomposition and halo exchange
+
+Every rank owns whole columns of water: the ranks split $x$ and $y$ and never $z$.
+
+- `--decomp slabs` splits $y$ only, like the 2D rows;
+- `--decomp pencils` splits $x$ and $y$, like the 2D blocks (`--py`, `--px`, or `MPI_Dims_create`).
+
+The 2D layout code (`make_layout`) is used as it is. A rank therefore has the same four neighbours as in 2D, and its 2D flow block and halo exchanges are those of `heat_parallel`. Splitting $z$ as well (`blocks`) is left to model B: ranks with the same columns of water would all need the same 2D flow, which they would have to compute several times over or receive from one another.
+
+Each pigment face a rank exchanges is a 2D slab: one row or one column in every layer (`Halo3D`, `src/parallel3d/halo3d.cpp`).
+
+- The north and south faces (row 1 or $n_y$ of every layer) are $n_z$ blocks of $n_x$ contiguous values, one layer apart. They are sent straight from the field with one MPI vector datatype.
+- The west and east faces (column 1 or $n_x$ of every row of every layer) are packed into buffers of $n_z \times n_y$ values, as the 2D columns are.
+
+The seven-point stencil reads no edge or corner ghosts, so faces are enough. With `--exchange overlap`, the messages are started, the wall ghosts are filled, the strict interior of the 2D rule is updated in every layer, the messages are waited for, and the remaining cells of every layer are updated exactly once.
+
+For the 3D benchmark problem $P_3$ (1024 × 1024 × 64 cells, see "Experiments" below), the values a rank sends per step against the cells it owns are:
+
+| Ranks | Decomposition | Process grid ($y \times x$) | Cells per rank ($x \times y \times z$) | Halo values / owned values |
+| --- | --- | --- | --- | --- |
+| 64 | slabs | 64 × 1 | 1024 × 16 × 64 | 0.125 |
+| 64 | pencils | 8 × 8 | 128 × 128 × 64 | 0.031 |
+| 256 | slabs | 256 × 1 | 1024 × 4 × 64 | 0.5 |
+| 256 | pencils | 16 × 16 | 64 × 64 × 64 | 0.063 |
+
+These are upper bounds that ignore the walls.
+
+### Output
+
+- `--output PATH` writes the whole 3D field: CSV with $n_z n_y$ rows of $n_x$ values (layer by layer, surface first; within a layer, the north row first, as in 2D), or `.npy` of shape $(n_z, n_y, n_x)$. The parallel solver gathers the field only when it is written.
+- Snapshots keep the 2D folder of `design.md`, with the surface layer as the pigment (`field_NNNNNN.npy`), so the 2D plotting scripts work unchanged, and add a vertical section through the row of the blob centre (`section_NNNNNN.npy`, $n_z \times n_x$) and `meta3d.json`.
+- The `RESULT` line is the 2D one with the 3D fields added: `model`, `nz`, `lz`, `dz`, `blob_z`, `flow` (`live` or `frozen`), `pigment_s` (the pigment updates of the timed loop, halos included) and `pigment_halo_s` (their halo exchanges), each the largest over the ranks. `cell_updates_per_s` counts all $n_x n_y n_z$ cells.
+
+### Correctness checks
+
+- `tests/test_3d.cpp`: the 3D storage, options and time step; **one layer equals the 2D pigment exactly**, and so does **every layer of a depth-independent field**; a 3D blob in the flow (mass conserved to rounding, no new extrema, symmetric about mid-depth); a constant field under the flow; the frozen flow; the 3D cosine decay against the exact discrete solution and its convergence to the continuous one (at least second order; the error falls about 16-fold per refinement here, since the time and space errors partly cancel at this step); the output layouts.
+- `tests/test_halo3d.cpp` (MPI, 1, 4 and 6 ranks): after a blocking or a nonblocking exchange, every face ghost next to another rank holds its neighbour's value in every layer, for slabs and pencils, and no wall ghost is touched.
+- `experiments/correctness_3d.json` (experiment 0 for model A, run by `scripts/check_correctness.py`): 14 cases with serial checks and serial/parallel comparisons of the whole 3D field, with slabs and pencils, blocking and overlapping exchange, up to 6 ranks × 2 threads, uneven grids, one layer, 3 × 3 × 2 cells on 4 ranks, the periodic wind, the frozen flow, the depth-independent drop, the constant field and the cosine decay.
+
+### Experiments
+
+$P_3$ (`experiments/benchmark_problem_3d.json`) is the 2D problem $P$ with 64 layers over a depth of 0.0625 (cubic cells, 67 million of them), the blob at mid-depth and the flow frozen from rest. Three experiments use it, with the runner of the 2D experiments (`"model": "3d"` in the file selects the 3D programs, and the raw CSV files get the columns of `results/raw/metrics_columns_3d.csv`):
+
+| File | Question | What changes |
+| --- | --- | --- |
+| `strong_scaling_3d.json` | How much faster do more ranks make $P_3$? | 1 to 256 ranks, one thread each, pencils, blocking |
+| `communication_3d.json` | Do slabs or pencils, blocking or overlap matter when every face is 64 layers deep? | slabs or pencils × blocking or overlap, 256 ranks |
+| `weak_scaling_3d.json` | Does the time stay the same with 256 × 256 × 64 cells per rank? | 1, 4, 16, 64 and 256 ranks |
+
+The jobs are `hpc/jobs/exp3d_one_node.pbs` and `hpc/jobs/exp3d_four_nodes.pbs`. As for $P$, time one serial run on Vanda first and adjust $n_z$ or the number of steps in the one problem file.
+
+### Code
+
+| Path | Contents |
+| --- | --- |
+| `src/common3d/` | `Field3D`, the 3D stencil, the 3D options and time step (`Config3D`, on top of the 2D `Config`), initial conditions, walls, mass and cosine reference, and the 3D output. No MPI or OpenMP. |
+| `src/serial3d/` | `heat3d_serial`. |
+| `src/parallel3d/` | `heat3d_parallel`: the 3D halo exchange, the gathers for output and the solver. |
+| `src/serial/serial_flow.hpp`, `src/parallel/parallel_flow.hpp`, `src/parallel/parallel_tools.hpp` | The 2D flow of each solver and the MPI helpers, moved out of the 2D solvers unchanged so that both models share them. |
+
+The 2D programs are unchanged in behaviour; their tests and correctness cases pass as before.
 
 ## Why and what
+
+*This section and all after it describe model B, the proposal of 3 November.*
 
 We extend the whole model to three dimensions: the pigment and the wind-driven flow. The Poisson solve, which takes over 99% of the run time in 2D, becomes a three-dimensional pressure Poisson equation, and in experiment 3 it also runs on GPUs through OpenMP target offload.
 

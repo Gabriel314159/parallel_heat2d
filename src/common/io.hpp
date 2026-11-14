@@ -19,14 +19,74 @@
 
 #pragma once
 
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "common/config.hpp"
 #include "common/grid.hpp"
+
+// Builds one JSON object, key by key. Numbers keep 17 significant digits;
+// NaN and infinity become null, which JSON readers accept.
+class JsonObject {
+public:
+    void add(const std::string& key, const std::string& value) { field(key) << '"' << escape(value) << '"'; }
+    void add(const std::string& key, const char* value) { add(key, std::string(value)); }
+    void add(const std::string& key, int value) { field(key) << value; }
+    void add(const std::string& key, long value) { field(key) << value; }
+    void add(const std::string& key, double value) {
+        if (std::isfinite(value)) {
+            field(key) << std::setprecision(17) << value;
+        } else {
+            field(key) << "null";
+        }
+    }
+    void add(const std::string& key, bool value) { field(key) << (value ? "true" : "false"); }
+    std::string str() const { return "{" + body_.str() + "}"; }
+    // The fields without the braces, to add them to another object.
+    std::string fields() const { return body_.str(); }
+
+    // JSON string escapes: quotes, backslashes and every control character
+    // (MPI version strings can hold tabs, which JSON readers reject raw).
+    static std::string escape(const std::string& text) {
+        std::string out;
+        for (const char ch : text) {
+            if (ch == '"' || ch == '\\') {
+                out += '\\';
+                out += ch;
+            } else if (ch == '\n') {
+                out += "\\n";
+            } else if (ch == '\t') {
+                out += "\\t";
+            } else if (static_cast<unsigned char>(ch) < 0x20) {
+                char code[8];
+                std::snprintf(code, sizeof code, "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(ch)));
+                out += code;
+            } else {
+                out += ch;
+            }
+        }
+        return out;
+    }
+
+private:
+    std::ostringstream& field(const std::string& key) {
+        if (!first_) body_ << ", ";
+        first_ = false;
+        body_ << '"' << escape(key) << "\": ";
+        return body_;
+    }
+
+    std::ostringstream body_;
+    bool first_ = true;
+};
 
 struct RunSummary {
     std::string solver;  // "heat_serial" or "heat_parallel"
@@ -78,6 +138,13 @@ struct RunSummary {
     std::string compiler;
     std::string mpi_library = "none";
     std::string build_type;
+    // For other models (3D): the grid as printed ("nx x ny" if empty), the
+    // pigment cells updated per step (nx ny if 0), further RESULT fields
+    // (JsonObject::fields()) and further report lines, printed before RESULT.
+    std::string grid;
+    double cells = 0.0;
+    std::string extra_json;
+    std::string report_lines;
 };
 
 // Compiler name and version, and the CMake build type this was built with.
@@ -109,6 +176,8 @@ std::string replace_extension(const std::string& path, const std::string& extens
 
 void write_field_csv(const std::string& path, const std::vector<double>& values, int ny, int nx);
 void write_field_npy(const std::string& path, const std::vector<double>& values, int ny, int nx);
+// Any shape, e.g. {nz, ny, nx} for a 3D field (C order: the last index varies fastest).
+void write_npy(const std::string& path, const std::vector<double>& values, const std::vector<std::size_t>& shape);
 void write_text_file(const std::string& path, const std::string& text);
 
 // The final field, as CSV or .npy depending on the extension of `path`.

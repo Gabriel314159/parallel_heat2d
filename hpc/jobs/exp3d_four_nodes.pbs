@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat3d_4nodes
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+# The 3D pigment model above one node (docs/design_3d.md, model A): 3D experiment 1
+# at 128 and 256 ranks, 3D experiment 4 (slabs or pencils, blocking or overlap, 256
+# ranks) and 3D experiment 5 at 256 ranks.
+
+HEAT2D_TIMEOUT=900
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate3d
+run --config experiments/strong_scaling_3d.json --metrics-csv results/raw/strong_scaling_3d_4nodes.csv \
+    "${SOCKET[@]}" --run p128_t1_pencils_blocking --run p256_t1_pencils_blocking
+run --config experiments/communication_3d.json "${SOCKET[@]}"
+run --config experiments/weak_scaling_3d.json --metrics-csv results/raw/weak_scaling_3d_4nodes.csv \
+    "${SOCKET[@]}" --run p256_t1_pencils_blocking

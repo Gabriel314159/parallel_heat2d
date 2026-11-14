@@ -40,7 +40,32 @@ PROBLEM_FLAGS = {
     "background": "--background",
     "amplitude": "--amplitude",
     "blob_width": "--blob-width",
+    "poisson_tol": "--poisson-tol",
+    "poisson_max_iter": "--poisson-max-iter",
+    # The 3D pigment model (heat3d_serial, heat3d_parallel; docs/design_3d.md, "Model A").
+    "nz": "--nz",
+    "lz": "--lz",
+    "blob_z": "--blob-z",  # a depth, or "column"
 }
+# JSON problem key -> solver flag given without a value when the key is true.
+SWITCH_FLAGS = {
+    "freeze_flow": "--freeze-flow",
+}
+
+# The two models, by the "model" key of an experiment file (default "2d").
+MODELS = {
+    "2d": {"serial": "heat_serial", "serial_omp": "heat_serial_omp", "parallel": "heat_parallel",
+           "decompositions": ("rows", "2d")},
+    "3d": {"serial": "heat3d_serial", "parallel": "heat3d_parallel", "decompositions": ("slabs", "pencils")},
+}
+
+
+def model_of(experiment: dict) -> str:
+    """The model an experiment file is for: "2d" (default) or "3d"."""
+    model = experiment.get("model", "2d")
+    if model not in MODELS:
+        raise ValueError(f"unknown model {model!r}; use one of {sorted(MODELS)}")
+    return model
 
 
 def load_json(path: str | Path) -> dict:
@@ -91,7 +116,7 @@ def resolve_base(path: str | Path, _depth: int = 0) -> dict:
 
 def problem_args(problem: dict) -> list[str]:
     """Solver flags for a resolved "problem" object."""
-    unknown = set(problem) - set(PROBLEM_FLAGS) - {"blob_centre"}
+    unknown = set(problem) - set(PROBLEM_FLAGS) - set(SWITCH_FLAGS) - {"blob_centre"}
     if unknown:
         raise ValueError(f"unknown problem keys: {sorted(unknown)}")
     args: list[str] = []
@@ -99,6 +124,12 @@ def problem_args(problem: dict) -> list[str]:
         value = problem.get(key)
         if value is not None:
             args += [flag, format_value(value)]
+    for key, flag in SWITCH_FLAGS.items():
+        value = problem.get(key)
+        if value is not None and not isinstance(value, bool):
+            raise ValueError(f"{key} must be true or false")
+        if value:
+            args.append(flag)
     if problem.get("blob_centre") is not None:
         x, y = problem["blob_centre"]
         args += ["--blob-x", format_value(x), "--blob-y", format_value(y)]

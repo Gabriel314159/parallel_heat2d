@@ -16,48 +16,6 @@
 
 namespace {
 
-// Builds one JSON object, key by key. Numbers keep 17 significant digits;
-// NaN and infinity become null, which JSON readers accept.
-class JsonObject {
-public:
-    void add(const std::string& key, const std::string& value) { field(key) << '"' << escape(value) << '"'; }
-    void add(const std::string& key, const char* value) { add(key, std::string(value)); }
-    void add(const std::string& key, int value) { field(key) << value; }
-    void add(const std::string& key, double value) {
-        if (std::isfinite(value)) {
-            field(key) << std::setprecision(17) << value;
-        } else {
-            field(key) << "null";
-        }
-    }
-    std::string str() const { return "{" + body_.str() + "}"; }
-
-private:
-    std::ostringstream& field(const std::string& key) {
-        if (!first_) body_ << ", ";
-        first_ = false;
-        body_ << '"' << escape(key) << "\": ";
-        return body_;
-    }
-    static std::string escape(const std::string& text) {
-        std::string out;
-        for (char ch : text) {
-            if (ch == '"' || ch == '\\') {
-                out += '\\';
-                out += ch;
-            } else if (ch == '\n') {
-                out += "\\n";
-            } else {
-                out += ch;
-            }
-        }
-        return out;
-    }
-
-    std::ostringstream body_;
-    bool first_ = true;
-};
-
 void add_config(JsonObject& json, const Config& c) {
     json.add("nx", c.nx);
     json.add("ny", c.ny);
@@ -80,6 +38,12 @@ void add_config(JsonObject& json, const Config& c) {
     json.add("blob_x", c.blob_x);
     json.add("blob_y", c.blob_y);
     json.add("blob_width", c.blob_width);
+}
+
+// Pigment cell updates in the main loop: nx ny per step, or s.cells (3D).
+double cell_updates(const Config& c, const RunSummary& s) {
+    const double cells = s.cells > 0 ? s.cells : static_cast<double>(c.nx) * c.ny;
+    return cells * c.steps;
 }
 
 // CG iterations per Poisson solve of the main loop.
@@ -138,8 +102,7 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("poisson_iterations_mean", iterations_mean(s));
     json.add("poisson_iterations_max", s.poisson_iterations_max);
     json.add("snapshot_s", s.snapshot_s);
-    const double updates = static_cast<double>(c.nx) * c.ny * c.steps;
-    json.add("cell_updates_per_s", s.elapsed_s > 0 ? updates / s.elapsed_s : 0.0);
+    json.add("cell_updates_per_s", s.elapsed_s > 0 ? cell_updates(c, s) / s.elapsed_s : 0.0);
     json.add("mass_initial", s.mass_initial);
     json.add("mass_final", s.mass_final);
     json.add("mass_error", s.mass_error);
@@ -154,18 +117,22 @@ std::string summary_json(const Config& c, const RunSummary& s) {
     json.add("compiler", s.compiler);
     json.add("mpi_library", s.mpi_library);
     json.add("build_type", s.build_type);
-    return json.str();
+    std::string text = json.str();
+    if (!s.extra_json.empty()) text.insert(text.size() - 1, ", " + s.extra_json);
+    return text;
 }
 
 void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
-    const double updates = static_cast<double>(c.nx) * c.ny * c.steps;
-    out << s.solver << ": " << c.nx << " x " << c.ny << " cells, " << s.spinup_steps << " spin-up + " << c.steps
+    const double updates = cell_updates(c, s);
+    const bool parallel = s.solver.find("parallel") != std::string::npos;
+    const std::string grid = s.grid.empty() ? std::to_string(c.nx) + " x " + std::to_string(c.ny) : s.grid;
+    out << s.solver << ": " << grid << " cells, " << s.spinup_steps << " spin-up + " << c.steps
         << " steps, case " << case_name(c.initial_case) << "\n"
         << "  dt = " << s.dt << ", pigment released at t = " << s.t_release << ", final time = " << s.t_end << "\n"
         << "  flow: viscosity = " << c.viscosity << ", wind " << wind_name(c.wind)
         << " F0 = " << c.wind_amplitude;
     if (c.wind == Wind::periodic) out << ", alpha = " << c.wind_alpha << ", period = " << c.wind_period;
-    if (s.solver == "heat_parallel") {
+    if (parallel) {
         out << "\n  parallel: " << s.mpi_ranks << " ranks x " << s.omp_threads << " threads on " << s.nodes
             << (s.nodes == 1 ? " node, " : " nodes, ");
         if (s.cores_per_rank > 0) out << "at least " << s.cores_per_rank << " cores per rank, ";
@@ -182,7 +149,7 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
     if (s.snapshot_s > 0) out << ", snapshots: " << s.snapshot_s << " s";
     out << "\n  Poisson solves in the loop: " << s.poisson_s << " s (" << iterations_mean(s)
         << " CG iterations per step on average, at most " << s.poisson_iterations_max << ")";
-    if (s.solver == "heat_parallel") {
+    if (parallel) {
         out << "; inside them, halo exchanges " << s.poisson_halo_s << " s and global sums " << s.poisson_sum_s
             << " s (at least " << s.poisson_sum_min_s << " s on every rank)";
     }
@@ -196,6 +163,7 @@ void print_summary(std::ostream& out, const Config& c, const RunSummary& s) {
         out << "  cosine_decay error: vs exact discrete " << s.cosine_discrete_error << ", vs continuous "
             << s.cosine_continuous_error << "\n";
     }
+    out << s.report_lines;
     out << "RESULT " << summary_json(c, s) << "\n";
 }
 
@@ -258,16 +226,27 @@ void write_field_csv(const std::string& path, const std::vector<double>& values,
 // NumPy .npy version 1.0: magic, version, header length, a Python-dict header
 // padded to a multiple of 64 bytes, then the raw little-endian doubles.
 void write_field_npy(const std::string& path, const std::vector<double>& values, int ny, int nx) {
-    if (values.size() != static_cast<std::size_t>(ny) * static_cast<std::size_t>(nx)) {
-        throw std::invalid_argument("write_field_npy: size does not match ny x nx");
+    write_npy(path, values, {static_cast<std::size_t>(ny), static_cast<std::size_t>(nx)});
+}
+
+void write_npy(const std::string& path, const std::vector<double>& values, const std::vector<std::size_t>& shape) {
+    std::size_t count = 1;
+    std::string dims;
+    for (const std::size_t n : shape) {
+        count *= n;
+        dims += std::to_string(n) + ", ";
     }
+    if (shape.empty() || values.size() != count) {
+        throw std::invalid_argument("write_npy: the number of values does not match the shape");
+    }
+    if (shape.size() > 1) dims.erase(dims.size() - 2);  // (4, 6); a 1-tuple keeps its comma: (4,)
+    else dims.erase(dims.size() - 1);
     const std::uint16_t probe = 1;
     if (*reinterpret_cast<const unsigned char*>(&probe) != 1) {
-        throw std::runtime_error("write_field_npy assumes a little-endian machine");
+        throw std::runtime_error("write_npy assumes a little-endian machine");
     }
 
-    std::string header = "{'descr': '<f8', 'fortran_order': False, 'shape': (" + std::to_string(ny) + ", " +
-                         std::to_string(nx) + "), }";
+    std::string header = "{'descr': '<f8', 'fortran_order': False, 'shape': (" + dims + "), }";
     const std::size_t preamble = 10;  // magic (6) + version (2) + header length (2)
     const std::size_t unpadded = preamble + header.size() + 1;
     header.append((unpadded + 63) / 64 * 64 - unpadded, ' ');

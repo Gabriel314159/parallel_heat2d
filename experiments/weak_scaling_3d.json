@@ -1,0 +1,26 @@
+{
+  "schema_version": 5,
+  "kind": "weak_scaling",
+  "model": "3d",
+  "defaults": "benchmark_problem_3d.json",
+  "description": "3D experiment 5: weak scaling of the 3D pigment from one core to 256. One thread per rank and a fixed 256 x 256 x 64 block per rank (4.2 million cells) on square process grids (1x1, 2x2, 4x4, 8x8, 16x16, pencils). The spacing dx = dy = dz = 1/256 is fixed: the basin grows in x and y (lx = px*local_nx*dx, ly = py*local_ny*dy) and keeps the depth lz = 0.25 with 64 layers, so dt and the number of steps are the same for every run. The other settings, the frozen flow included, come from benchmark_problem_3d.json; the blob centre is set per resource, at mid-depth.",
+  "local_nx": 256,
+  "local_ny": 256,
+  "spacing": {"dx": 0.00390625, "dy": 0.00390625},
+  "problem": {"nz": 64, "lz": 0.25, "blob_z": 0.125},
+  "execution": {"backend": "parallel"},
+  "decomposition": "pencils",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {"mpi_ranks": 1, "omp_threads": 1, "process_grid": [1, 1], "problem": {"blob_centre": [0.5, 0.5]}},
+    {"mpi_ranks": 4, "omp_threads": 1, "process_grid": [2, 2], "problem": {"blob_centre": [1.0, 1.0]}},
+    {"mpi_ranks": 16, "omp_threads": 1, "process_grid": [4, 4], "problem": {"blob_centre": [2.0, 2.0]}},
+    {"mpi_ranks": 64, "omp_threads": 1, "process_grid": [8, 8], "problem": {"blob_centre": [4.0, 4.0]}},
+    {"mpi_ranks": 256, "omp_threads": 1, "process_grid": [16, 16], "problem": {"blob_centre": [8.0, 8.0]}}
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {"directory": "outputs/weak_scaling_3d", "write_field": false, "snapshot_interval": 0},
+  "metrics_csv": "results/raw/weak_scaling_3d.csv"
+}

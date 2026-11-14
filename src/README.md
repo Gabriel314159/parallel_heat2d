@@ -1,12 +1,15 @@
 # C++ sources
 
-The shared components (`common/`), the serial solver (`serial/`) and the MPI + OpenMP solver (`parallel/`) are implemented and tested. The model, discretization and boundary rule are specified in `docs/design.md`. Unit tests are in `tests/` and run with `ctest --test-dir build`.
+The shared components (`common/`), the serial solver (`serial/`) and the MPI + OpenMP solver (`parallel/`) are implemented and tested. The model, discretization and boundary rule are specified in `docs/design.md`. The 3D pigment model (`common3d/`, `serial3d/`, `parallel3d/`) is model A of `docs/design_3d.md`; see "The 3D pigment model" at the end. Unit tests are in `tests/` and run with `ctest --test-dir build`.
 
 | Directory | Contents |
 | --- | --- |
 | `common/` | Components shared by both solvers: configuration, grid, the flow (vorticity equation and Poisson solver), physics, stencil and output. Independent of MPI and OpenMP. |
 | `serial/` | The serial driver and solver, the reference for correctness. |
 | `parallel/` | The MPI + OpenMP driver, solver, decomposition and halo exchange. The solver supplies the global sums and halo exchanges of the shared CG Poisson solver. |
+| `common3d/` | The 3D pigment: `Field3D`, the seven-point stencil, the 3D options and time step, initial conditions, walls, mass, the 3D cosine reference and the 3D output. Independent of MPI and OpenMP. |
+| `serial3d/` | `heat3d_serial`. |
+| `parallel3d/` | `heat3d_parallel`: the 3D halo exchange, the gathers for output and the solver. |
 
 Source includes can use paths such as `common/grid.hpp`; CMake exposes the `src` directory to all targets.
 
@@ -68,7 +71,7 @@ The time step is fixed for the run. Every `check_interval` steps the largest fac
 
 ## Serial solver (`serial/`)
 
-Files: `main.cpp`, `solver.hpp`, `solver.cpp`. Run `heat_serial --help` for the options. The same files also build `heat_serial_omp`: the serial solver compiled with the OpenMP pragmas of the shared loops (as in `heat_parallel`) and always run on one thread, the second one-core reference of the experiments.
+Files: `main.cpp`, `solver.hpp`, `solver.cpp`, and `serial_flow.hpp` (`SerialFlow`: the 2D flow of the whole grid and one step of it, shared with `heat3d_serial`). Run `heat_serial --help` for the options. The same files also build `heat_serial_omp`: the serial solver compiled with the OpenMP pragmas of the shared loops (as in `heat_parallel`) and always run on one thread, the second one-core reference of the experiments.
 
 The driver parses parameters, allocates the full domain with its ghost layer, the face-velocity arrays and the flow fields, spins the flow up from rest, releases the pigment, runs a fixed number of time steps, optionally writes the final field and snapshots, and reports the timings, the mass error and the flow diagnostics.
 
@@ -90,7 +93,9 @@ Run `heat_parallel --help` for the options. On every correctness case it agrees 
 | File | Responsibility |
 | --- | --- |
 | `main.cpp` | MPI initialization (`MPI_THREAD_FUNNELED`, `MPI_ERRORS_RETURN`), parameter handling, solver invocation and finalization. Any exception prints the rank and ends in `MPI_Abort`. |
-| `solver.hpp`, `solver.cpp` | The thread count (`configure_threads`), spin-up and time loop, physical-wall ghost fill, the flow step, OpenMP worksharing, strategy selection, the speed check, timing and the global sums. |
+| `solver.hpp`, `solver.cpp` | Spin-up and time loop, physical-wall ghost fill, OpenMP worksharing of the pigment update, strategy selection, the speed check, timing and the gather of the final field. |
+| `parallel_flow.hpp` | `ParallelFlow`: one rank's 2D flow and one step of it (the vorticity update, the CG solve with `MpiComm`, the corner exchanges and the face velocities). Header-only; shared with `heat3d_parallel`. |
+| `parallel_tools.hpp` | The thread count (`configure_threads`), global sums and maxima, the thread-count and binding checks, rank-0 output with `MPI_Abort` on failure, the MPI library name and the strict interior for overlap. Header-only; shared with `heat3d_parallel`. |
 | `decomposition.hpp`, `decomposition.cpp` | Local sizes and global offsets, remainder distribution, process topology (Cartesian communicator without reordering) and physical-edge ownership; the node count; `mpi_check`, which turns an MPI error code into an exception. |
 | `halo.hpp`, `halo.cpp` | Blocking exchange and start/finish operations for nonblocking exchange (the pigment and the CG's search direction), and the blocking exchange with corners for $\psi$ and $\zeta$. |
 | `poisson_comm.hpp` | `MpiComm`: the global sums (`MPI_Allreduce`) and halo exchanges of the CG solver, blocking or overlapping, and the time spent inside them. |
@@ -130,3 +135,25 @@ The total mass $M = \Delta x\,\Delta y\sum c_{i,j}$, the energy and the enstroph
 Gather only small fields for validation or selected visual output, outside solver timing. Use a barrier before the timed region and reduce local elapsed times with `MPI_MAX` after it. The timed loop includes the halo exchanges, the physical-wall ghost fill and the whole flow step. A global barrier is not required after every time step when neighbor exchanges already enforce the required dependencies.
 
 The Poisson time and the CG iterations cover the solves of the timed loop only; the spin-up's solves are part of the spin-up time. `MpiComm` adds up the time inside the CG's halo exchanges and global sums (`MPI_Wtime` around each call); the solver reports each as the largest over the ranks (`poisson_halo_s`, `poisson_sum_s`); it also reports the smallest global-sum time over the ranks (`poisson_sum_min_s`), which is close to the reduction alone (an upper bound on it): a rank that arrives last at every sum does not wait.
+
+## The 3D pigment model (`common3d/`, `serial3d/`, `parallel3d/`)
+
+Model A of `docs/design_3d.md`: the pigment in three dimensions, carried by the 2D flow, the same in every layer and with no vertical velocity. The flow code is the 2D code (`SerialFlow`, `ParallelFlow`); only the pigment is new. Run `heat3d_serial --help` for the options.
+
+| File | Responsibility |
+| --- | --- |
+| `common3d/field3d.hpp` | `Field3D`: one block of the 3D pigment with a ghost layer on all six sides, stored layer by layer and row by row with $x$ fastest; `(k, i, j)` access and `row(k, i)` pointers. Layers count down from the surface. First touch row by row, as the update loops share the rows out. |
+| `common3d/stencil3d.hpp` | `update_cell_3d`: the 2D update with the fluxes through the top and bottom faces (`face_flux`, positive upwards; model A passes $w = 0$). `update_region_3d` updates rows and columns of every layer, the (layer, row) pairs shared out among the OpenMP threads with `collapse(2)`. |
+| `common3d/config3d.hpp`, `config3d.cpp` | `Config3D`: the 2D `Config` plus `nz`, `lz`, the blob depth (or a depth-independent column) and `freeze_flow`. `parse_args_3d` reads the 3D options, translates `--decomp slabs|pencils` to the 2D rows and blocks and passes everything else to the 2D `parse_args`. The 3D stability limits (vertical diffusion in the pigment limit) and `time_step_3d`. |
+| `common3d/physics3d.hpp`, `physics3d.cpp` | Initial conditions (3D Gaussian, the 2D drop in every layer, constant, 3D cosine), the no-flux ghost fill on all six walls, mass sums and the 3D cosine reference (continuous and exact discrete). |
+| `common3d/io3d.hpp`, `io3d.cpp` | The whole 3D field (CSV or `.npy` of shape `(nz, ny, nx)`), the surface layer and a vertical section, the 3D fields of the run summary (`describe_3d`) and the 3D snapshot folder (`SnapshotWriter3D`: the 2D folder with the surface layer, plus `section_*.npy` and `meta3d.json`). |
+| `serial3d/` | `heat3d_serial`: the 2D serial solver's loop with the 3D pigment update; `--freeze-flow` skips the flow step after the spin-up. |
+| `parallel3d/halo3d.hpp`, `halo3d.cpp` | `Halo3D`: the blocking and nonblocking exchange of the 3D pigment's four side faces. North and south faces go straight from the field with one vector datatype ($n_z$ blocks of $n_x$ values, a layer apart); west and east faces are packed into buffers of $n_z \times n_y$ values. |
+| `parallel3d/gather3d.hpp` | `gather_boxes`: pieces of a global 3D array collected on rank 0, for output only. |
+| `parallel3d/solver.hpp`, `solver.cpp` | `heat3d_parallel`: the 2D layout (`make_layout`, slabs = rows, pencils = blocks), the 2D flow of the rank (`ParallelFlow`), the 3D pigment with its halo exchange (blocking, or overlapped with the strict interior of every layer), timing of the pigment updates and their halos (`pigment_s`, `pigment_halo_s`), and the gathers for snapshots and `--output`. |
+
+Invariants, in addition to those of the 2D code:
+
+- The ranks split $x$ and $y$ only. Every block has all $n_z$ layers, so the surface and the bottom are walls of every block, filled locally, and a rank has the four neighbours of the 2D layout.
+- The 3D update reads only the six face neighbours: no edge or corner ghosts are needed.
+- With one layer, or with a field that does not change with depth, both vertical fluxes are exactly zero, and every layer must equal the 2D pigment exactly (`tests/test_3d.cpp`).

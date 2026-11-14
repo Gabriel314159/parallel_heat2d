@@ -16,10 +16,15 @@ its final field is compared cell by cell with the serial one
 (serial_parallel_atol / serial_parallel_rtol). Until then those comparisons
 are reported as skipped; --serial-only skips them silently.
 
+An experiment file with "model": "3d" (experiments/correctness_3d.json) runs
+the 3D pigment model instead: heat3d_serial against heat3d_parallel, with the
+whole 3D field compared cell by cell.
+
 Exit status: 0 if every check passed, 1 otherwise.
 
 Example:
     python3 scripts/check_correctness.py --serial-only
+    python3 scripts/check_correctness.py --experiment experiments/correctness_3d.json
 """
 
 from __future__ import annotations
@@ -30,7 +35,8 @@ import shlex
 import sys
 from pathlib import Path
 
-from heat2d_tools import (REPO, SHARED_KEYS, deep_merge, executable, load_json, problem_args, read_field_csv,
+from heat2d_tools import (MODELS, REPO, SHARED_KEYS, deep_merge, executable, load_json, model_of, problem_args,
+                          read_field_csv,
                           resolve_base, run_solver)
 
 
@@ -92,7 +98,9 @@ def main() -> int:
     args = parser.parse_args()
 
     experiment_path = Path(args.experiment).resolve()
-    checks = load_json(experiment_path)["checks"]
+    experiment = load_json(experiment_path)
+    checks = experiment["checks"]
+    model = MODELS[model_of(experiment)]
     runs = resolve_runs(experiment_path)
     if args.run:
         runs = [run for run in runs if run["name"] in args.run]
@@ -100,8 +108,8 @@ def main() -> int:
         for run in runs:
             run["execution"]["exchange"] = args.exchange
 
-    serial = executable(args.build_dir, "heat_serial")
-    parallel_path = Path(args.build_dir) / "heat_parallel"
+    serial = executable(args.build_dir, model["serial"])
+    parallel_path = Path(args.build_dir) / model["parallel"]
     parallel_built = parallel_path.is_file()
 
     report = []
@@ -139,9 +147,11 @@ def main() -> int:
                 results.append(("cosine vs continuous", None,
                                 f"{summary['cosine_continuous_error']:.2e} (discretization error, reported only)"))
 
-            # heat_serial_omp, the second one-core reference, must give the serial field.
-            serial_omp = Path(args.build_dir) / "heat_serial_omp"
-            if serial_omp.is_file():
+            # heat_serial_omp, the second one-core reference, must give the serial field (2D only).
+            serial_omp = Path(args.build_dir) / model["serial_omp"] if "serial_omp" in model else None
+            if serial_omp is None:
+                pass
+            elif serial_omp.is_file():
                 omp_csv = out_dir / f"{name}_serial_omp.csv"
                 try:
                     run_solver([str(serial_omp), *problem_args(problem), "--output", str(omp_csv)])
@@ -156,7 +166,7 @@ def main() -> int:
             execution = run["execution"]
             if execution.get("backend") == "parallel" and not args.serial_only:
                 if not parallel_built:
-                    results.append(("serial vs parallel", None, "skipped: heat_parallel is not built yet"))
+                    results.append(("serial vs parallel", None, f"skipped: {model['parallel']} is not built yet"))
                 else:
                     ranks = int(execution["mpi_ranks"])
                     threads = int(execution["omp_threads"])
@@ -187,7 +197,8 @@ def main() -> int:
                         results.append(("parallel run", False, str(error)))
 
         exchange = run["execution"].get("exchange", "none")
-        print(f"{name}  ({problem['nx']} x {problem['ny']}, {problem['steps']} steps, case {problem['case']}, "
+        grid = f"{problem['nx']} x {problem['ny']}" + (f" x {problem['nz']}" if "nz" in problem else "")
+        print(f"{name}  ({grid}, {problem['steps']} steps, case {problem['case']}, "
               f"{exchange} exchange)")
         for check, passed, detail in results:
             mark = "ok  " if passed else ("--  " if passed is None else "FAIL")
