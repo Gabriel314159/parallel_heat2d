@@ -1,15 +1,29 @@
 # Raw measurements
 
-Measured on Vanda (nodes of two Xeon Platinum 8452Y, 72 cores) on 3 and 4 November 2026, one node per run:
+Measured on Vanda (nodes of two Xeon Platinum 8452Y, 72 cores) on 3 and 4 November 2026:
 
-- `strong_scaling_mpi_1node.csv`: experiment 1, both serial references and 1 to 64 ranks.
+- `strong_scaling_mpi_1node.csv`: experiment 1, both serial references and 1 to 64 ranks on one node.
+- `strong_scaling_mpi_4nodes.csv`: experiment 1 at 128 and 256 ranks (64 cores of each node).
 - `strong_scaling_openmp.csv`: experiment 2, the references and 1 to 72 threads. Its 9 error rows are a first attempt that the launcher refused (a rank bound across both sockets); they are kept.
-- `weak_scaling_1node.csv`: experiment 5, the references and 1, 4, 16 and 64 ranks.
+- `hybrid_layouts.csv`: experiment 3, the seven layouts of 256 cores, from 256 × 1 to 4 × 64.
 - `hybrid_gpu.csv`: experiment 3 with the Poisson solve on one and on two A40 GPUs.
+- `communication.csv`: experiment 4, rows or 2D and blocking or overlap, 256 ranks.
+- `weak_scaling_1node.csv`: experiment 5, the references and 1, 4, 16 and 64 ranks.
+- `weak_scaling_4nodes.csv`: experiment 5 at 256 ranks.
 - `correctness_report.json`: experiment 0, 12 cases, no failed check.
 - `sessions/<experiment>/<session_id>.json`: the resolved plan and environment of each runner call.
 
-The runs on four nodes (experiments 1, 3, 4 and 5 from 128 ranks on) are not in yet. `git_commit` is `unknown` in the rows measured on CPU nodes (`CN-…`), where `git` was not found; judging by the session times, experiment 5 ran at 445dd60, and in experiment 2 the references and error rows at 445dd60 and the threaded rows at 2340aab.
+The follow-up runs of 8 November 2026 (`experiments/README.md`, "Follow-up runs"), all at commit b43323f, after the first-touch change and with the column `poisson_sum_min_s`:
+
+- `strong_scaling_openmp_firsttouch.csv`: experiment 2 again, 2 to 72 threads. It ran on a GPU node (`GN-…`, the same CPUs).
+- `hybrid_layouts_firsttouch.csv`: experiment 3 again, the seven layouts, 10 repetitions each.
+- `hybrid_node.csv`: the 64 cores of one node as 64 × 1 to 2 × 32 ranks × threads.
+- `node_spread.csv`: 64 ranks on 1, 2 and 4 nodes, for the problem of experiment 1 (1024²) and the block per rank of experiment 5 (2048²).
+- `weak_scaling_extra_1node.csv` and `weak_scaling_extra_3nodes.csv`: experiment 5 at 9 and 36 ranks, and at 144 ranks.
+- `placement_control.csv` and `placement_control_mhz.log`: the control runs on one node (16 and 32 ranks on socket 0 or split, 64 ranks twice) and the CPU clock of every core every 5 s during the second 64-rank run.
+- `gpu_sizes_cpu.csv` and `gpu_sizes_gpu.csv`: one rank and two ranks of 36 threads, on the CPU and with one and two A40, at 512², 1024², 2048² and 4096² (100, 100, 20 and 10 steps).
+
+`git_commit` is `unknown` in the rows measured on CPU nodes (`CN-…`), where `git` was not found. Judging by the session times, the four-node runs and the experiment 2 and 5 runs ran at these commits: the four-node runs at 9bafe9e, experiment 5 (one node) at 445dd60, and in experiment 2 the references and error rows at 445dd60 and the threaded rows at 2340aab.
 
 [metrics_columns.csv](metrics_columns.csv) is a header-only format template. It must not be treated as experimental data.
 
