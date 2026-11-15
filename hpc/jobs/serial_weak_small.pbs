@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_sw_small
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=01:30:00
+#PBS -j oe
+# Serial runs of the weak-scaled problems of experiment 5 (experiments/serial_weak_*.json, 100 steps):
+# heat_serial on one core at 512^2 (4 ranks), 768^2 (9) and 1024^2 (16), for the scaled speedup. The
+# larger sizes have a job each.
+
+HEAT2D_TIMEOUT=1800
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+CSV=(--metrics-csv results/raw/serial_weak_small.csv "${CORE[@]}" --run serial_reference)
+run --config experiments/serial_weak_512.json "${CSV[@]}"
+run --config experiments/serial_weak_768.json --repetitions 3 "${CSV[@]}"
+run --config experiments/serial_weak_1024.json --repetitions 3 "${CSV[@]}"

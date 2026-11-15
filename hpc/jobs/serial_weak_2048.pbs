@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_sw_2048
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=04:30:00
+#PBS -j oe
+# The serial run of the weak-scaled problem on 2048^2 cells (64 ranks), 100 steps: an estimated one hour a run; no warmup, three repetitions.
+# Its own CSV (jobs must not share one).
+
+HEAT2D_TIMEOUT=7200
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+gate
+run --config experiments/serial_weak_2048.json --metrics-csv results/raw/serial_weak_2048.csv \
+    --warmup-runs 0 --repetitions 3 "${CORE[@]}" --run serial_reference

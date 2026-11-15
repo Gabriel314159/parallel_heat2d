@@ -1,0 +1,37 @@
+{
+  "schema_version": 5,
+  "kind": "strong_scaling",
+  "defaults": "benchmark_problem.json",
+  "description": "Serial reference of the weak-scaled problem of 36 ranks: 1536 x 1536 cells of the 6 x 6 basin (256 x 256 cells per rank, dx = dy = 1/256, so dt is that of experiment 5), 100 steps, run by the pure serial program on one core. It gives T_serial(N_p) for the scaled speedup S_G(p) = T_serial(N_p) / T(p) (Gustafson). hpc/jobs/serial_weak_*.pbs runs only the references (--run serial_reference); the parallel entry is a placeholder.",
+  "problem": {
+    "nx": 1536,
+    "ny": 1536,
+    "lx": 6.0,
+    "ly": 6.0,
+    "blob_centre": [
+      3.0,
+      3.0
+    ],
+    "steps": 100
+  },
+  "execution": {
+    "backend": "parallel"
+  },
+  "decomposition": "2d",
+  "exchange": "blocking",
+  "include_serial_reference": true,
+  "resources": [
+    {
+      "mpi_ranks": 1,
+      "omp_threads": 1
+    }
+  ],
+  "warmup_runs": 1,
+  "repetitions": 5,
+  "output": {
+    "directory": "outputs/serial_weak_1536",
+    "write_field": false,
+    "snapshot_interval": 0
+  },
+  "metrics_csv": "results/raw/serial_weak_1536.csv"
+}
