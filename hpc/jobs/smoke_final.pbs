@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N heat2d_smoke
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l walltime=01:00:00
+#PBS -j oe
+# Check the integrated code on Vanda, without timings: the CMake build (2D,
+# model A and the 3D Poisson benchmark), CTest, the 2D and 3D correctness
+# cases, and the 3D Poisson validation with MPI. Submit from the repository:
+#   qsub -q auto_free hpc/jobs/smoke_final.pbs
+
+HEAT2D_TESTS=ON
+source "$PBS_O_WORKDIR/hpc/jobs/common.sh" || exit 1
+echo "commit $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
+(unset OMP_PLACES OMP_PROC_BIND; ctest --test-dir "$BUILD" --output-on-failure) > "$BUILD.ctest.log" 2>&1
+echo "ctest exit $?"
+tail -3 "$BUILD.ctest.log"
+
+gate
+echo "2D correctness passed"
+gate3d
+echo "3D correctness passed"
+
+(unset OMP_PLACES OMP_PROC_BIND
+ cd poisson3d && python3 run_experiments.py verify --build-dir "$PBS_O_WORKDIR/$BUILD" \
+     --output "$PBS_O_WORKDIR/outputs/poisson3d_verify_$PBS_JOBID") > "$BUILD.poisson3d.log" 2>&1
+echo "poisson3d verify exit $?"
+tail -8 "$BUILD.poisson3d.log"

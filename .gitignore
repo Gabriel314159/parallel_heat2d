@@ -26,6 +26,8 @@
 /playground/
 
 # Large or temporary solver outputs
+/poisson3d/build*/
+/poisson3d/results/
 /outputs/
 /tmp/
 /logs/

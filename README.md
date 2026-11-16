@@ -13,11 +13,11 @@ Implemented and tested:
 - Unit tests ([tests/](tests/), run with `ctest`) and [scripts/check_correctness.py](scripts/check_correctness.py): mass conservation, constant fields under the flow, the exact discrete cosine-decay solution, and serial/parallel comparisons.
 - [scripts/plot_field.py](scripts/plot_field.py) and [scripts/animate_field.py](scripts/animate_field.py) for pictures and animations of the pigment.
 - The 3D pigment model (model A of [docs/design_3d.md](docs/design_3d.md)): the pigment in a basin with depth, carried by the same 2D flow in every layer, in `heat3d_serial` and `heat3d_parallel` (slab and pencil decompositions, blocking and overlapping exchange). With one layer, or with a field that does not change with depth, every layer reproduces the 2D pigment exactly. Its correctness cases are in [experiments/correctness_3d.json](experiments/correctness_3d.json) and its experiments are `experiments/*_3d.json`.
+- The CG Poisson solve of `heat_parallel` on GPUs with OpenMP target offload (CMake option `HEAT2D_OFFLOAD`, [docs/design.md](docs/design.md)).
+- A standalone 3D Poisson benchmark ([poisson3d/](poisson3d/README.md)): the seven-point Laplacian with Dirichlet walls, solved by CG in serial, with MPI + OpenMP and on GPUs, for the 2D/3D Poisson comparison.
+- The benchmark runner [scripts/run_benchmarks.py](scripts/run_benchmarks.py) and the Vanda job scripts in [hpc/jobs/](hpc/jobs).
 
-Not implemented yet:
-
-- The benchmark runner and scaling plots (`scripts/run_benchmarks.py`, `scripts/plot_results.py`).
-- Measurements on Atlas or Vanda.
+Measured on Vanda: experiments 0 to 5 of the 2D model and their follow-up runs ([results/raw/](results/raw/README.md)), and the 3D Poisson benchmark ([results/raw/poisson3d/](results/raw/poisson3d)). The 3D pigment experiments are configured but not yet measured.
 
 ## Problem
 
@@ -140,12 +140,13 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 | Path | Contents |
 | --- | --- |
 | [src/](src/README.md) | C++ sources: shared components (`common/`), serial solver (`serial/`), MPI + OpenMP solver (`parallel/`), and the 3D pigment model (`common3d/`, `serial3d/`, `parallel3d/`). |
+| [poisson3d/](poisson3d/README.md) | Standalone 3D Poisson benchmark: solver, validation, experiment runners and Vanda jobs. |
 | [tests/](tests/) | C++ unit tests, run by `ctest`. |
 | [scripts/](scripts/README.md) | Correctness checks, plotting and animation; planned benchmark tools. |
 | [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
 | [experiments/](experiments/README.md) | The correctness check and the five performance experiments, with the shared benchmark problem. |
 | [hpc/](hpc/README.md) | HPC setup notes and job templates. |
-| [results/raw/](results/raw/README.md) | Measured benchmark CSV files, when available. |
+| [results/raw/](results/raw/README.md) | Measured benchmark CSV files and session records; `poisson3d/` holds the 3D Poisson measurements. |
 | [results/figures/](results/figures/README.md) | Selected figures generated from measured data. |
 | [docs/design.md](docs/design.md) | Numerical and software design decisions. |
 | [docs/design_3d.md](docs/design_3d.md) | The 3D models: model A (3D pigment in the 2D flow, implemented) and model B (3D flow, proposal). |
@@ -176,9 +177,9 @@ See [experiments/README.md](experiments/README.md) for configuration semantics a
 4. Add OpenMP computation and verify hybrid configurations. (Done.)
 5. Add two-dimensional decomposition, including column communication. (Done.)
 6. Add nonblocking exchange and computation overlap. (Done.)
-7. Implement the experiment utilities, run local checks and collect HPC measurements.
+7. Implement the experiment utilities, run local checks and collect HPC measurements. (Done for the 2D model and the 3D Poisson benchmark.)
 8. Write conclusions from the measured data and finish the report.
 
 ## Submission scope
 
-The assignment asks for a PDF report, source code with running instructions, measured runtime figures from Atlas or Vanda, correctness validation and an explanation of AI use. The supplied assignment specifies submission before 13 November 2026 and mentions an optional progress report before 30 October. Confirm the precise cutoff time on Canvas.
+The assignment asks for a PDF report, source code with running instructions, measured runtime figures from Atlas or Vanda, correctness validation and an explanation of AI use. Confirm the submission deadline on Canvas.

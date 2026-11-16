@@ -72,6 +72,15 @@ if(HEAT2D_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
     list(APPEND HEAT2D_TARGETS heat_serial_omp)
 endif()
 
+# Standalone 3D Poisson benchmark (poisson3d/README.md), built as poisson3d/build.sh does.
+add_executable(poisson3d_serial poisson3d/poisson3d.cpp)
+list(APPEND HEAT2D_TARGETS poisson3d_serial)
+if(OpenMP_CXX_FOUND)
+    add_executable(poisson3d_serial_omp poisson3d/poisson3d.cpp)
+    target_link_libraries(poisson3d_serial_omp PRIVATE OpenMP::OpenMP_CXX)
+    list(APPEND HEAT2D_TARGETS poisson3d_serial_omp)
+endif()
+
 # Parallel solver (src/parallel): configured only when its sources exist.
 set(HEAT2D_PARALLEL_SOURCES
     src/parallel/main.cpp
@@ -118,6 +127,15 @@ elseif(HEAT2D_ENABLE_MPI AND HEAT2D_PARALLEL_READY)
         target_compile_definitions(heat3d_parallel PRIVATE HEAT2D_USE_OPENMP=1)
     endif()
     list(APPEND HEAT2D_TARGETS heat3d_parallel)
+
+    # poisson3d_mpi: the standalone 3D Poisson benchmark over MPI + OpenMP.
+    add_executable(poisson3d_mpi poisson3d/poisson3d.cpp)
+    target_link_libraries(poisson3d_mpi PRIVATE MPI::MPI_CXX)
+    target_compile_definitions(poisson3d_mpi PRIVATE USE_MPI)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(poisson3d_mpi PRIVATE OpenMP::OpenMP_CXX)
+    endif()
+    list(APPEND HEAT2D_TARGETS poisson3d_mpi)
 endif()
 
 # GPU build: the CG of heat_parallel on an A40 (docs/design.md). Empty
@@ -175,6 +193,12 @@ if(HEAT2D_BUILD_TESTS)
                          --serial-only --build-dir "${CMAKE_BINARY_DIR}"
                          --output-dir "${CMAKE_BINARY_DIR}/correctness_3d"
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        # The 3D Poisson benchmark: second-order convergence and the exact discrete solution.
+        add_test(NAME poisson3d_verify_serial
+                 COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/poisson3d/run_experiments.py"
+                         verify --serial-only --build-dir "${CMAKE_BINARY_DIR}"
+                         --output "${CMAKE_BINARY_DIR}/poisson3d_verify"
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/poisson3d")
         # Serial vs parallel comparisons; needs up to 6 MPI ranks. Extra launcher
         # flags (e.g. --oversubscribe on a small machine) go in HEAT2D_MPIEXEC_FLAGS.
         if(TARGET heat_parallel AND MPIEXEC_EXECUTABLE)

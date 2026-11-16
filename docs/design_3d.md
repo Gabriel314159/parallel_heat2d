@@ -1,9 +1,10 @@
 # Three-dimensional model
 
-**Status, 14 November 2026.** The extension to three dimensions is done in two steps.
+**Status, 16 November 2026.** The extension to three dimensions is done in two steps, and a standalone 3D Poisson benchmark sits beside them.
 
 - **Model A, implemented:** the pigment in three dimensions, carried by the 2D wind-driven flow of `design.md`, the same in every layer and with no vertical velocity. Programs `heat3d_serial` and `heat3d_parallel`; see the next section.
 - **Model B, proposal of 3 November, not implemented:** the 3D flow with a projection method, the 3D pressure Poisson equation and the GPU offload. It is described from "Why and what" to the end of this document, and its decisions are still open.
+- **3D Poisson benchmark, implemented and measured:** `poisson3d/` solves $-\Delta\phi=f$ with the seven-point operator and Dirichlet walls by CG, in serial, with MPI + OpenMP (x and y split, as in model A's pencils) and on GPUs. It is not part of model A, whose flow still solves the 2D Poisson equation; it serves the 2D/3D Poisson comparison. See `poisson3d/README.md`.
 
 ## Model A: the 3D pigment in the 2D flow (implemented)
 

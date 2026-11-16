@@ -70,6 +70,16 @@ On 14 November 2026, Anthropic Claude (claude.ai cloud session; configured model
 
 Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
 
+On 16 November 2026, a team member added the standalone 3D Poisson benchmark (`poisson3d/`) and its Vanda measurements (`results/raw/poisson3d/`), first uploaded as an archive on the branch `3D-Poisson`. AI assistance for this part: _[fill in]_.
+
+On 16 November 2026, Anthropic Claude (claude.ai cloud session; configured model Claude Opus 5.5) reviewed that benchmark and, at the team's request, integrated the branches into `final`:
+
+- Review: read `poisson3d.cpp` and `poisson3d_gpu.hpp` (halo directions and tags, derived datatypes, overlap regions, wall ghosts, first touch, timing) and found no error. Ran the benchmark's own validation in a Linux container (2 cores, GCC 13.3, MPICH 4.2.3): convergence orders 2.01 and 2.00, exact discrete solution to 1.6e-14, serial/MPI field differences at most 7e-15 on five layouts; and further cases with one or two points per rank, with overlap, which agreed with the serial field to 3e-17 with identical iteration counts. The GPU code was read but not run.
+- Integration: model A re-applied on top of the latest 2D results (43ad716), with `min_over_ranks(double)` moved to `parallel_tools.hpp` and `poisson_sum_min_s` reported by `heat3d_parallel` too; the benchmark unpacked into `poisson3d/` with its measurements in `results/raw/poisson3d/`, built by CMake as well (`poisson3d_serial`, `poisson3d_serial_omp`, `poisson3d_mpi`) and validated by `ctest` (`poisson3d_verify_serial`); its README translated to English. Not taken over: the archive itself and the "bridge" demonstration, which carried a modified copy of model A. READMEs updated; `hpc/jobs/smoke_final.pbs` added to check the integrated code on Vanda.
+- Report: drafted LaTeX text for sections of the report from the measured CSV files.
+
+Accepted by the team: _[fill in]_. Human review performed: _[fill in]_.
+
 ## Append future entries
 
 For each substantial use, record:

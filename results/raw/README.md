@@ -24,6 +24,8 @@ The follow-up runs of 8 November 2026 (`experiments/README.md`, "Follow-up runs"
 
 `git_commit` is `unknown` in the rows measured on CPU nodes (`CN-…`), where `git` was not found. Judging by the session times, the four-node runs and the experiment 2 and 5 runs ran at these commits: the four-node runs at 9bafe9e, experiment 5 (one node) at 445dd60, and in experiment 2 the references and error rows at 445dd60 and the threaded rows at 2340aab.
 
+The 3D Poisson benchmark ([poisson3d/README.md](../../poisson3d/README.md)), measured on 16 November 2026 in its own format (one row per solve, columns described in that README): `poisson3d/one-node.csv` (job 1559053), `poisson3d/four-nodes.csv` (job 1563439) and `poisson3d/gpu.csv` (job 1559087, two A40), each with a JSON record of commands, modules and binary hashes, the four-node launch checks `poisson3d/preflight-*.json`, the PBS records `poisson3d/jobs.json` and the medians in `poisson3d/summary.csv`.
+
 [metrics_columns.csv](metrics_columns.csv) is a header-only format template. It must not be treated as experimental data.
 
 Commit compact raw CSV files and associated resolved configurations/environment records when experiments are run. Each experiment of `experiments/` has its own file, named after its experiment file (for example `strong_scaling_mpi.csv`); `scripts/run_benchmarks.py` appends to it. Experiments 1 and 5 run in two jobs that may run at the same time, so their rows go to `<name>_1node.csv` and `<name>_4nodes.csv` (`--metrics-csv`); join them before the analysis. Keep every measured repetition, its success/failure status and the exact Git commit.

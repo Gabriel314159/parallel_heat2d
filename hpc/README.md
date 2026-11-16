@@ -98,7 +98,10 @@ qsub -P <project> hpc/jobs/cpu_sizes.pbs
 qsub -P <project> hpc/jobs/gpu_sizes.pbs
 qsub -P <project> hpc/jobs/exp3d_one_node.pbs
 qsub -P <project> hpc/jobs/exp3d_four_nodes.pbs
+qsub -q auto_free hpc/jobs/smoke_final.pbs
 ```
+
+`smoke_final.pbs` checks a checkout without timing anything: the CMake build, CTest, the 2D and 3D correctness cases and the validation of the 3D Poisson benchmark with MPI. The 3D Poisson benchmark has its own jobs, submitted from `poisson3d/` (see [poisson3d/README.md](../poisson3d/README.md)).
 
 With `-P` and no `-q`, the default queue `auto` routes a job to `batch_cpu` or `batch_gpu`, which accept jobs only from it.
 
