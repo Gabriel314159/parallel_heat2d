@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrr}
+\toprule
+\shortstack[r]{Ranks $\times$\\threads} & \shortstack[r]{$T$\\(s)} & $\dfrac{T_{\mathrm{MPI}}}{T}$ & \shortstack[r]{$t_{\mathrm{it}}-\mathrm{sum}$\\(ms)} \\
+\midrule
+$64\times1$ & 5.74 & 1.00 & 0.038 \\
+$32\times2$ & 6.82 & 0.84 & 0.044 \\
+$16\times4$ & 6.90 & 0.83 & 0.048 \\
+$8\times8$ & 7.24 & 0.79 & 0.054 \\
+$4\times16$ & 7.67 & 0.75 & 0.063 \\
+$2\times32$ & 8.02 & 0.72 & 0.069 \\
+\bottomrule
+\end{tabular}
+\caption{The 64 cores of one node (32 per socket) split between MPI ranks and OpenMP threads, on the fixed problem $P$ ($1024\times1024$ cells, 100 steps), 2D decomposition, blocking exchange; no message leaves the node. $T$ is the median of five repetitions of the loop time and $T_{\mathrm{MPI}}/T$ the speedup over the pure MPI layout $64\times1$. $t_{\mathrm{it}}-\mathrm{sum}$ is the time per CG iteration without its global sums: the local sweeps and the halo exchange.}
+\label{tab:hybrid-node}
+\end{table}

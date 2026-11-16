@@ -1,0 +1,23 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrrrrrrr}
+\toprule
+Ranks $p$ & $T$ (s) & spread (s) & $S$ & $E$ & $T_P/T$ (\%) & $\bar k$ & $t_{\mathrm{it}}$ (ms) & halo (ms) & sum (ms) \\
+\midrule
+serial & 273.7 & 3.5 & -- & -- & -- & -- & -- & -- & -- \\
+\midrule
+1 & 275.12 & 1.54 & 1.0 & 0.99 & 99.6 & 1095 & 2.502 & 0.005 & 0.001 \\
+2 & 140.29 & 27.07 & 2.0 & 0.98 & 99.6 & 1096 & 1.275 & 0.010 & 0.012 \\
+4 & 72.42 & 0.70 & 3.8 & 0.94 & 99.6 & 1095 & 0.658 & 0.013 & 0.014 \\
+8 & 37.47 & 1.39 & 7.3 & 0.91 & 99.6 & 1096 & 0.341 & 0.012 & 0.027 \\
+16 & 15.34 & 0.68 & 17.8 & 1.12 & 99.6 & 1096 & 0.139 & 0.008 & 0.019 \\
+32 & 9.30 & 0.53 & 29.4 & 0.92 & 99.6 & 1095 & 0.085 & 0.006 & 0.015 \\
+64 & 5.73 & 0.82 & 47.7 & 0.75 & 99.7 & 1096 & 0.052 & 0.006 & 0.015 \\
+128 & 13.91 & 0.88 & 19.7 & 0.15 & 99.9 & 1095 & 0.127 & 0.036 & 0.107 \\
+256 & 29.28 & 1.56 & 9.3 & 0.04 & 100.0 & 1095 & 0.267 & 0.085 & 0.255 \\
+\bottomrule
+\end{tabular}
+\caption{Experiment 1: strong scaling over MPI ranks on the fixed problem $P$ ($1024\times1024$ cells, 100 steps), one thread per rank. $T$ is the median of five repetitions of the loop time and the spread is their largest minus their smallest value; $S=T_{\mathrm{serial}}/T$ and $E=S/p$ are taken against \texttt{heat\_serial}. $T_P/T$ is the share of the Poisson solves, $\bar k$ the mean CG iterations per step, and $t_{\mathrm{it}}$, halo and sum the time per CG iteration of the Poisson solve, of its halo exchanges and of its global sums. Runs up to 64 ranks are on one node; 128 and 256 ranks use two and four nodes.}
+\label{tab:strong-mpi}
+\end{table}

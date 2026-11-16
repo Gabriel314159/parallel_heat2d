@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrrrrr}
+\toprule
+\shortstack[r]{Ranks $\times$\\threads} & \shortstack[r]{Cells\\per rank} & \shortstack[r]{$T$\\(s)} & $\dfrac{T_{\mathrm{MPI}}}{T}$ & \shortstack[r]{$t_{\mathrm{it}}$\\(ms)} & \shortstack[r]{halo\\(ms)} & \shortstack[r]{sum\\(ms)} & \shortstack[r]{$t_{\mathrm{it}}-\mathrm{sum}$\\(ms)} \\
+\midrule
+$256\times1$ & $64\times64$ & 28.32 & 1.00 & 0.258 & 0.070 & 0.246 & 0.013 \\
+$128\times2$ & $128\times64$ & 24.85 & 1.14 & 0.227 & 0.046 & 0.210 & 0.017 \\
+$64\times4$ & $128\times128$ & 22.38 & 1.27 & 0.204 & 0.045 & 0.181 & 0.023 \\
+$32\times8$ & $256\times128$ & 18.79 & 1.51 & 0.171 & 0.031 & 0.145 & 0.026 \\
+$16\times16$ & $256\times256$ & 25.17 & 1.13 & 0.229 & 0.044 & 0.191 & 0.038 \\
+$8\times32$ & $512\times256$ & 23.85 & 1.19 & 0.217 & 0.040 & 0.166 & 0.052 \\
+$4\times64$ & $512\times512$ & 24.10 & 1.18 & 0.219 & 0.048 & 0.114 & 0.105 \\
+\bottomrule
+\end{tabular}
+\caption{Experiment 3: the 256 cores of four nodes split between MPI ranks and OpenMP threads, on the fixed problem $P$ ($1024\times1024$ cells, 100 steps), 2D decomposition, blocking exchange. Cells per rank are $n_x\times n_y$. $T$ is the median of ten repetitions of the loop time and $T_{\mathrm{MPI}}/T$ the speedup over the pure MPI layout $256\times1$. The Poisson solves are 99.7 to 100\% of $T$ and take $\bar k=1095$ CG iterations per step in every layout; $t_{\mathrm{it}}$, halo and sum are the time per CG iteration of the solve, of its halo exchanges and of its global sums (maxima over the ranks, so the parts do not add up); $t_{\mathrm{it}}-\mathrm{sum}$ is the rest of the iteration, the local sweeps and the halo exchange.}
+\label{tab:hybrid-layouts}
+\end{table}

@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrrrrrrr}
+\toprule
+Threads $p$ & $T$ (s) & spread (s) & $S$ & $E$ & $T_P/T$ (\%) & $\bar k$ & $t_{\mathrm{it}}$ (ms) & halo (ms) & sum (ms) \\
+\midrule
+serial & 273.4 & 2.5 & -- & -- & -- & -- & -- & -- & -- \\
+\midrule
+2 & 141.90 & 0.79 & 1.9 & 0.96 & 99.6 & 1096 & 1.290 & 0.006 & 0.0006 \\
+4 & 71.76 & 0.62 & 3.8 & 0.95 & 99.6 & 1095 & 0.652 & 0.007 & 0.0006 \\
+8 & 36.64 & 0.16 & 7.5 & 0.93 & 99.5 & 1095 & 0.333 & 0.008 & 0.0005 \\
+16 & 15.59 & 0.81 & 17.5 & 1.10 & 99.4 & 1095 & 0.141 & 0.008 & 0.0003 \\
+32 & 11.75 & 0.40 & 23.3 & 0.73 & 99.5 & 1096 & 0.107 & 0.008 & 0.0002 \\
+36 & 11.24 & 0.42 & 24.3 & 0.68 & 99.5 & 1095 & 0.102 & 0.008 & 0.0002 \\
+64 & 11.53 & 0.11 & 23.7 & 0.37 & 99.6 & 1095 & 0.105 & 0.013 & 0.0002 \\
+72 & 12.60 & 0.85 & 21.7 & 0.30 & 99.6 & 1095 & 0.115 & 0.014 & 0.0002 \\
+\bottomrule
+\end{tabular}
+\caption{Experiment 2: strong scaling over OpenMP threads on the fixed problem $P$ ($1024\times1024$ cells, 100 steps), one rank. $T$ is the median of five repetitions of the loop time and the spread is their largest minus their smallest value; $S=T_{\mathrm{serial}}/T$ and $E=S/p$ are taken against \texttt{heat\_serial}. $T_P/T$ is the share of the Poisson solves, $\bar k$ the mean CG iterations per step and $t_{\mathrm{it}}$, halo and sum the time per CG iteration of the Poisson solve, of its halo routine and of its global sums; with one rank there are no messages, so these two are the time spent inside those routines. The runs are those after the storage was first touched in parallel (8 November 2026, on a GPU node of the same CPUs), which has no one-thread point; the serial reference is that of the first run of the experiment. One socket holds 36 cores, so 64 and 72 threads use both.}
+\label{tab:strong-openmp}
+\end{table}

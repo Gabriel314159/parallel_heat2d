@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+Problem & Nodes & \shortstack[r]{$T$\\(s)} & $\dfrac{T}{T_{1\,\mathrm{node}}}$ & \shortstack[r]{sum\\(ms)} & \shortstack[r]{$t_{\mathrm{it}}-\mathrm{sum}$\\(ms)} \\
+\midrule
+$1024^2$ & 1 & 5.67 & 1.00 & 0.014 & 0.038 \\
+$1024^2$ & 2 & 15.19 & 2.68 & 0.107 & 0.032 \\
+$1024^2$ & 4 & 24.62 & 4.34 & 0.190 & 0.035 \\
+\midrule
+$2048^2$ & 1 & 56.30 & 1.00 & 0.061 & 0.140 \\
+$2048^2$ & 2 & 77.45 & 1.38 & 0.156 & 0.120 \\
+$2048^2$ & 4 & 94.47 & 1.68 & 0.213 & 0.124 \\
+\bottomrule
+\end{tabular}
+\caption{The same 64 MPI ranks, one thread each, on one, two and four nodes (64, 32 and 16 ranks per node, split evenly between the two sockets); 2D decomposition, blocking exchange, 100 steps. $1024^2$ is the fixed problem $P$; $2048^2$ is the 64-rank problem of experiment 5, a $256\times256$ block per rank. $T$ is the median of five repetitions of the loop time and $T/T_{1\,\mathrm{node}}$ its ratio to the same problem on one node. sum is the time per CG iteration of the global sums (maximum over the ranks) and $t_{\mathrm{it}}-\mathrm{sum}$ the rest of the iteration: the local sweeps and the halo exchange.}
+\label{tab:node-spread}
+\end{table}
