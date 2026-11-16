@@ -1,0 +1,23 @@
+{
+  "one-node": {
+    "job_id": "1559053.stdct-mgmt-02",
+    "job_state": "F",
+    "Exit_status": "0",
+    "resources_used.walltime": "00:07:23",
+    "queue": "batch_cpu"
+  },
+  "four-nodes": {
+    "job_id": "1563439.stdct-mgmt-02",
+    "job_state": "F",
+    "Exit_status": "0",
+    "resources_used.walltime": "00:05:22",
+    "queue": "batch_cpu"
+  },
+  "gpu": {
+    "job_id": "1559087.stdct-mgmt-02",
+    "job_state": "F",
+    "Exit_status": "0",
+    "resources_used.walltime": "00:04:33",
+    "queue": "batch_gpu"
+  }
+}

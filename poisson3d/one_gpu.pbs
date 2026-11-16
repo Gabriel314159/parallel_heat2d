@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N poisson3d-a40
+#PBS -l select=1:ncpus=72:ngpus=1:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+
+set -eo pipefail
+cd "$PBS_O_WORKDIR"
+module purge
+module load nvhpc-hpcx-cuda12/26.1
+build="build-gpu-$PBS_JOBID"
+bash ./build_gpu.sh "$build"
+python3 run_experiments.py gpu --one-gpu-only --build-dir "$build" --output "results/$PBS_JOBID"

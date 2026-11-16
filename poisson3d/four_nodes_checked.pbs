@@ -1,0 +1,31 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N poisson3d-4n-check
+#PBS -l select=4:ncpus=72:mpiprocs=72
+#PBS -l place=scatter:excl
+#PBS -l walltime=02:00:00
+#PBS -j oe
+
+set -eo pipefail
+cd "$PBS_O_WORKDIR"
+module purge
+module load GCC/14.3.0 OpenMPI/5.0.8-GCC-14.3.0
+echo "Job $PBS_JOBID: allocated hosts"
+sort "$PBS_NODEFILE" | uniq -c
+module list
+command -v mpirun mpicxx
+mpirun --version
+mpicxx --showme:command
+: "${EBROOTPRRTE:?The OpenMPI module must expose EBROOTPRRTE}"
+test -x "$EBROOTPRRTE/bin/prted"
+echo "PRRTE prefix: $EBROOTPRRTE"
+# Inventory only. The previously working Vanda wrapper can use ssh launch.
+prte_info --param ras all || true
+prte_info --param plm all || true
+build="build-$PBS_JOBID"
+bash ./build.sh "$build"
+controls=()
+if [[ "${POISSON3D_CONTROLS:-0}" == 1 ]]; then
+    controls+=(--include-controls)
+fi
+python3 -u mpi_checked/run_experiments.py four-nodes "${controls[@]}" --build-dir "$build" --output "results/$PBS_JOBID"
