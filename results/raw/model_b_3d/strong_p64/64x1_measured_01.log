@@ -1,0 +1,102 @@
+COMMAND bash /nfs/home/svu/luwei.chen/model_b_big/mpi_vanda_big.sh -np 64 /nfs/home/svu/luwei.chen/model_b_big/build-1567814.stdct-mgmt-02/model_b_mpi --nx 1024 --ny 1024 --nz 1024 --lx 1.0 --ly 1.0 --lz 1.0 --steps 1 --spinup 0 --nu 0.001 --kappa 0.0001 --force 0.8 --tol 1e-08 --dt 0.0 --profile surface --decomp blocks --progress 100 --max-iter 10000
+Authorized users only. All activity may be monitored and reported.
+[CN-038:1000065] Rank 2 bound to package[0][core:4]
+[CN-038:1000065] Rank 6 bound to package[0][core:12]
+[CN-038:1000065] Rank 4 bound to package[0][core:8]
+[CN-038:1000065] Rank 8 bound to package[0][core:16]
+[CN-038:1000065] Rank 7 bound to package[0][core:14]
+[CN-038:1000065] Rank 10 bound to package[0][core:20]
+[CN-038:1000065] Rank 5 bound to package[0][core:10]
+[CN-038:1000065] Rank 3 bound to package[0][core:6]
+[CN-038:1000065] Rank 9 bound to package[0][core:18]
+[CN-038:1000065] Rank 1 bound to package[0][core:2]
+[CN-038:1000065] Rank 0 bound to package[0][core:0]
+[CN-038:1000065] Rank 11 bound to package[0][core:22]
+[CN-038:1000065] Rank 12 bound to package[0][core:24]
+[CN-038:1000065] Rank 15 bound to package[0][core:30]
+[CN-038:1000065] Rank 14 bound to package[0][core:28]
+[CN-038:1000065] Rank 13 bound to package[0][core:26]
+[CN-038:1000065] Rank 16 bound to package[0][core:32]
+[CN-038:1000065] Rank 17 bound to package[0][core:34]
+[CN-038:1000065] Rank 19 bound to package[0][core:38]
+[CN-038:1000065] Rank 18 bound to package[0][core:36]
+[CN-038:1000065] Rank 20 bound to package[0][core:40]
+[CN-038:1000065] Rank 21 bound to package[0][core:42]
+[CN-038:1000065] Rank 23 bound to package[0][core:46]
+[CN-038:1000065] Rank 22 bound to package[0][core:44]
+[CN-038:1000065] Rank 25 bound to package[0][core:50]
+[CN-038:1000065] Rank 24 bound to package[0][core:48]
+[CN-038:1000065] Rank 26 bound to package[0][core:52]
+[CN-038:1000065] Rank 27 bound to package[0][core:54]
+[CN-038:1000065] Rank 28 bound to package[0][core:56]
+[CN-038:1000065] Rank 30 bound to package[0][core:60]
+[CN-038:1000065] Rank 31 bound to package[0][core:62]
+[CN-038:1000065] Rank 29 bound to package[0][core:58]
+[CN-038:1000065] Rank 33 bound to package[1][core:3]
+[CN-038:1000065] Rank 34 bound to package[1][core:5]
+[CN-038:1000065] Rank 32 bound to package[1][core:1]
+[CN-038:1000065] Rank 36 bound to package[1][core:9]
+[CN-038:1000065] Rank 35 bound to package[1][core:7]
+[CN-038:1000065] Rank 37 bound to package[1][core:11]
+[CN-038:1000065] Rank 38 bound to package[1][core:13]
+[CN-038:1000065] Rank 39 bound to package[1][core:15]
+[CN-038:1000065] Rank 41 bound to package[1][core:19]
+[CN-038:1000065] Rank 42 bound to package[1][core:21]
+[CN-038:1000065] Rank 40 bound to package[1][core:17]
+[CN-038:1000065] Rank 45 bound to package[1][core:27]
+[CN-038:1000065] Rank 43 bound to package[1][core:23]
+[CN-038:1000065] Rank 44 bound to package[1][core:25]
+[CN-038:1000065] Rank 46 bound to package[1][core:29]
+[CN-038:1000065] Rank 47 bound to package[1][core:31]
+[CN-038:1000065] Rank 51 bound to package[1][core:39]
+[CN-038:1000065] Rank 48 bound to package[1][core:33]
+[CN-038:1000065] Rank 56 bound to package[1][core:49]
+[CN-038:1000065] Rank 52 bound to package[1][core:41]
+[CN-038:1000065] Rank 55 bound to package[1][core:47]
+[CN-038:1000065] Rank 53 bound to package[1][core:43]
+[CN-038:1000065] Rank 49 bound to package[1][core:35]
+[CN-038:1000065] Rank 57 bound to package[1][core:51]
+[CN-038:1000065] Rank 50 bound to package[1][core:37]
+[CN-038:1000065] Rank 54 bound to package[1][core:45]
+[CN-038:1000065] Rank 59 bound to package[1][core:55]
+[CN-038:1000065] Rank 60 bound to package[1][core:57]
+[CN-038:1000065] Rank 61 bound to package[1][core:59]
+[CN-038:1000065] Rank 62 bound to package[1][core:61]
+[CN-038:1000065] Rank 58 bound to package[1][core:53]
+[CN-038:1000065] Rank 63 bound to package[1][core:63]
+PROGRESS solve=1 iteration=100 solve_elapsed_s=33.3262 residual_rms=7.07488
+PROGRESS solve=1 iteration=200 solve_elapsed_s=66.128 residual_rms=5.65469
+PROGRESS solve=1 iteration=300 solve_elapsed_s=98.9444 residual_rms=4.21454
+PROGRESS solve=1 iteration=400 solve_elapsed_s=132.636 residual_rms=3.06608
+PROGRESS solve=1 iteration=500 solve_elapsed_s=167.905 residual_rms=2.17348
+PROGRESS solve=1 iteration=600 solve_elapsed_s=202.533 residual_rms=1.54711
+PROGRESS solve=1 iteration=700 solve_elapsed_s=235.41 residual_rms=1.09293
+PROGRESS solve=1 iteration=800 solve_elapsed_s=268.278 residual_rms=0.77044
+PROGRESS solve=1 iteration=900 solve_elapsed_s=301.171 residual_rms=0.182772
+PROGRESS solve=1 iteration=1000 solve_elapsed_s=334.052 residual_rms=0.165422
+PROGRESS solve=1 iteration=1100 solve_elapsed_s=366.911 residual_rms=0.134092
+PROGRESS solve=1 iteration=1200 solve_elapsed_s=399.765 residual_rms=0.0869098
+PROGRESS solve=1 iteration=1300 solve_elapsed_s=432.612 residual_rms=0.0605245
+PROGRESS solve=1 iteration=1400 solve_elapsed_s=465.481 residual_rms=0.0384439
+PROGRESS solve=1 iteration=1500 solve_elapsed_s=498.343 residual_rms=0.0264485
+PROGRESS solve=1 iteration=1600 solve_elapsed_s=531.189 residual_rms=0.0167921
+PROGRESS solve=1 iteration=1700 solve_elapsed_s=564.047 residual_rms=0.0105831
+PROGRESS solve=1 iteration=1800 solve_elapsed_s=596.897 residual_rms=0.00844716
+PROGRESS solve=1 iteration=1900 solve_elapsed_s=629.752 residual_rms=0.00441819
+PROGRESS solve=1 iteration=2000 solve_elapsed_s=662.613 residual_rms=0.00256986
+PROGRESS solve=1 iteration=2100 solve_elapsed_s=695.476 residual_rms=0.00153785
+PROGRESS solve=1 iteration=2200 solve_elapsed_s=728.338 residual_rms=0.000858946
+PROGRESS solve=1 iteration=2300 solve_elapsed_s=761.207 residual_rms=0.000467906
+PROGRESS solve=1 iteration=2400 solve_elapsed_s=794.071 residual_rms=0.000244592
+PROGRESS solve=1 iteration=2500 solve_elapsed_s=826.928 residual_rms=0.000130322
+PROGRESS solve=1 iteration=2600 solve_elapsed_s=859.786 residual_rms=7.28562e-05
+PROGRESS solve=1 iteration=2700 solve_elapsed_s=892.651 residual_rms=4.18372e-05
+PROGRESS solve=1 iteration=2800 solve_elapsed_s=925.536 residual_rms=2.04069e-05
+PROGRESS solve=1 iteration=2900 solve_elapsed_s=958.391 residual_rms=8.64563e-06
+PROGRESS solve=1 iteration=3000 solve_elapsed_s=991.265 residual_rms=3.4273e-06
+PROGRESS solve=1 iteration=3100 solve_elapsed_s=1024.12 residual_rms=1.45494e-06
+PROGRESS solve=1 iteration=3200 solve_elapsed_s=1056.98 residual_rms=6.69696e-07
+PROGRESS solve=1 iteration=3300 solve_elapsed_s=1089.83 residual_rms=3.23308e-07
+PROGRESS solve=1 iteration=3400 solve_elapsed_s=1122.69 residual_rms=1.44851e-07
+PROGRESS solve=1 iteration=3500 solve_elapsed_s=1155.54 residual_rms=7.1339e-08
+RESULT {"model":"B-pressure-projection","mode":"simulate","ranks":64,"threads":1,"nodes":1,"nx":1024,"ny":1024,"nz":1024,"px":4,"py":4,"pz":4,"pressure_unknowns":1073741824,"dt":2.5431315104166668e-05,"steps":1,"spinup":0,"loop_s":1173.1841338940001,"poisson_s":1167.2979880549999,"spinup_s":6.8299999999999996e-07,"output_s":8.5499999999999997e-07,"halo_s":55.271725918999955,"reduction_s":48.671488768000017,"cg_solves":1,"cg_iterations":3535,"cg_max_iterations":3535,"max_relative_residual":9.8761719562655751e-09,"last_residual_rms":5.7958676009993512e-08,"rhs_mean_removed":0,"div_before_rms":0.00014924460197307052,"div_after_rms":1.4739653527315059e-12,"max_divergence":1.1569449825249434e-11,"pressure_mean":-1.4907779871675686e-19,"mass_initial":0.0080630873724610308,"mass_final":0.0080630873724564199,"mass_abs_error":4.6108949991463533e-15,"c_min":2.9285541973753172e-34,"c_max":0.99995485057947819,"w_max":3.2721764866325102e-06,"error_rms":0,"error_max":0,"pigment_discrete_error":0}

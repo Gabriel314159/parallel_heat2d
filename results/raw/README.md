@@ -19,6 +19,7 @@ The follow-up runs of 8 November 2026 (`experiments/README.md`, "Follow-up runs"
 - `hybrid_node.csv`: the 64 cores of one node as 64 × 1 to 2 × 32 ranks × threads.
 - `node_spread.csv`: 64 ranks on 1, 2 and 4 nodes, for the problem of experiment 1 (1024²) and the block per rank of experiment 5 (2048²).
 - `weak_scaling_extra_1node.csv` and `weak_scaling_extra_3nodes.csv`: experiment 5 at 9 and 36 ranks, and at 144 ranks.
+- `serial_weak_small.csv` (512², 768², 1024²), `serial_weak_1536.csv`, `serial_weak_2048.csv`, `serial_weak_3072.csv` and `serial_weak_4096.csv`: `heat_serial` on the weak-scaled problems of experiment 5 (the grids of 4 to 256 ranks), for the scaled speedup; 5, 3, 3, 3, 3, 1 and 1 repetitions.
 - `placement_control.csv` and `placement_control_mhz.log`: the control runs on one node (16 and 32 ranks on socket 0 or split, 64 ranks twice) and the CPU clock of every core every 5 s during the second 64-rank run.
 - `gpu_sizes_cpu.csv` and `gpu_sizes_gpu.csv`: one rank and two ranks of 36 threads, on the CPU and with one and two A40, at 512², 1024², 2048² and 4096² (100, 100, 20 and 10 steps).
 

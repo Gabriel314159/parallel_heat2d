@@ -605,3 +605,9 @@ the $1024^2$ runs of 3 and 8 November differ by less than 1\% (31.80 against
 - **Section 4.2 has two hard-coded references**, "Section 2.3" and "Equation (12)". Replace them with `\ref` to your labels.
 - **Section 5.3.8 (3D)** still says "experiments 1, 4 and 5" and "problem $P$", which now match the names used in 5.2 and 5.3.
 - **Sections 6.6 to 6.8** keep their analysis text. Only their opening setup paragraphs changed.
+
+---
+
+## Section 3.4 and the 3D figures
+
+Replaced by `report/report_edits_3d.md`, which is about the 3D model with the pressure projection (Model B).

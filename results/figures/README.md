@@ -7,6 +7,10 @@ Made by `scripts/plot_*.py` from the CSVs of `results/raw/`; every figure is sav
 - `strong_scaling_openmp.png`: experiment 2, runtime, speedup and efficiency against `heat_serial`.
 - `strong_scaling_openmp_iteration.png`: experiment 2, time per CG iteration.
 - `weak_scaling_mpi.png`: experiment 5, runtime, time per CG iteration and the two weak efficiencies, from `weak_scaling_rerun.csv`.
+- `weak_scaling_mpi_scaled.png`: experiment 5 against the serial program on the same grid: runtime, scaled speedup $S_s=T_{\text{serial}}(N_p)/T(p)$ and $E_s=S_s/p$ with $E_{w,\text{it}}$, from `weak_scaling_rerun.csv` and `serial_weak_*.csv`, by `plot_weak_scaled.py`.
+- `strong_scaling_3d.png` and `strong_scaling_3d_iteration.png`: Model B (3D), 1024³ cells, runtime, speedup, efficiency and time per CG iteration, from `model_b_3d/strong_p*/`, by `plot_strong_3d.py`; the 1-rank point is extrapolated.
+- `domain.png`: the basin, its walls, the initial pigment blob and the wind forcing against $y$ (report Section 2), by `plot_domain.py` from `config/defaults.json`.
+- `domain_3d.png`: the 3D pigment as clouds of points at τ = 0, 2.44 and 9.77 (depth stretched 6 times), by `plot_domain_3d.py` from the fields in `outputs/flow3d` (heat3d_parallel of the 3D-Poisson branch, 128 × 128 × 8 cells, lz = 0.0625, viscosity 0.004, spin-up 8; the commands are in the .log files there).
 - `flow_evolution.png`: the flow at release and the pigment at three times after it (report Section 4.2), by `plot_flow_evolution.py` from the snapshots in `outputs/flow128` (128 × 128 cells, viscosity 0.004, spin-up 8, 16000 steps, a snapshot every 1000 steps).
 - `hybrid_layouts_iteration.png`: experiment 3, the time per CG iteration of the seven layouts and its two parts, the global sums and the rest. Its y axis is linear, not log (rule 4), so that the two parts visibly add up to $t_{\text{it}}$.
 

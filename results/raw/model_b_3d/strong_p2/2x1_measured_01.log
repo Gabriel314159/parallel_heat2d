@@ -1,0 +1,40 @@
+COMMAND bash /nfs/home/svu/luwei.chen/model_b_big/mpi_vanda_big.sh -np 2 /nfs/home/svu/luwei.chen/model_b_big/build-1567815.stdct-mgmt-02/model_b_mpi --nx 1024 --ny 1024 --nz 1024 --lx 1.0 --ly 1.0 --lz 1.0 --steps 1 --spinup 0 --nu 0.001 --kappa 0.0001 --force 0.8 --tol 1e-08 --dt 0.0 --profile surface --decomp blocks --progress 100 --max-iter 10000
+Authorized users only. All activity may be monitored and reported.
+[CN-129:1658017] Rank 0 bound to package[0][core:0]
+[CN-129:1658017] Rank 1 bound to package[0][core:2]
+PROGRESS solve=1 iteration=100 solve_elapsed_s=590.599 residual_rms=7.0756
+PROGRESS solve=1 iteration=200 solve_elapsed_s=1171.29 residual_rms=5.65431
+PROGRESS solve=1 iteration=300 solve_elapsed_s=1751.98 residual_rms=4.21446
+PROGRESS solve=1 iteration=400 solve_elapsed_s=2348.34 residual_rms=3.06616
+PROGRESS solve=1 iteration=500 solve_elapsed_s=2971.37 residual_rms=2.17348
+PROGRESS solve=1 iteration=600 solve_elapsed_s=3582.22 residual_rms=1.54709
+PROGRESS solve=1 iteration=700 solve_elapsed_s=4162.82 residual_rms=1.09293
+PROGRESS solve=1 iteration=800 solve_elapsed_s=4743.36 residual_rms=0.770442
+PROGRESS solve=1 iteration=900 solve_elapsed_s=5323.98 residual_rms=0.182808
+PROGRESS solve=1 iteration=1000 solve_elapsed_s=5904.55 residual_rms=0.165427
+PROGRESS solve=1 iteration=1100 solve_elapsed_s=6485.2 residual_rms=0.134091
+PROGRESS solve=1 iteration=1200 solve_elapsed_s=7065.84 residual_rms=0.0869145
+PROGRESS solve=1 iteration=1300 solve_elapsed_s=7646.58 residual_rms=0.0605228
+PROGRESS solve=1 iteration=1400 solve_elapsed_s=8227.28 residual_rms=0.0384447
+PROGRESS solve=1 iteration=1500 solve_elapsed_s=8807.9 residual_rms=0.0264493
+PROGRESS solve=1 iteration=1600 solve_elapsed_s=9388.56 residual_rms=0.0167915
+PROGRESS solve=1 iteration=1700 solve_elapsed_s=9969.17 residual_rms=0.0105833
+PROGRESS solve=1 iteration=1800 solve_elapsed_s=10549.8 residual_rms=0.00844714
+PROGRESS solve=1 iteration=1900 solve_elapsed_s=11130.6 residual_rms=0.00441802
+PROGRESS solve=1 iteration=2000 solve_elapsed_s=11711.2 residual_rms=0.00256994
+PROGRESS solve=1 iteration=2100 solve_elapsed_s=12291.9 residual_rms=0.00153785
+PROGRESS solve=1 iteration=2200 solve_elapsed_s=12872.5 residual_rms=0.000858958
+PROGRESS solve=1 iteration=2300 solve_elapsed_s=13453.1 residual_rms=0.000467913
+PROGRESS solve=1 iteration=2400 solve_elapsed_s=14033.6 residual_rms=0.000244592
+PROGRESS solve=1 iteration=2500 solve_elapsed_s=14614.1 residual_rms=0.000130323
+PROGRESS solve=1 iteration=2600 solve_elapsed_s=15194.7 residual_rms=7.28553e-05
+PROGRESS solve=1 iteration=2700 solve_elapsed_s=15775.2 residual_rms=4.18365e-05
+PROGRESS solve=1 iteration=2800 solve_elapsed_s=16355.8 residual_rms=2.04069e-05
+PROGRESS solve=1 iteration=2900 solve_elapsed_s=16936.4 residual_rms=8.64571e-06
+PROGRESS solve=1 iteration=3000 solve_elapsed_s=17516.8 residual_rms=3.42731e-06
+PROGRESS solve=1 iteration=3100 solve_elapsed_s=18097.3 residual_rms=1.45495e-06
+PROGRESS solve=1 iteration=3200 solve_elapsed_s=18677.8 residual_rms=6.69702e-07
+PROGRESS solve=1 iteration=3300 solve_elapsed_s=19258.3 residual_rms=3.23313e-07
+PROGRESS solve=1 iteration=3400 solve_elapsed_s=19838.8 residual_rms=1.44852e-07
+PROGRESS solve=1 iteration=3500 solve_elapsed_s=20419.2 residual_rms=7.13389e-08
+RESULT {"model":"B-pressure-projection","mode":"simulate","ranks":2,"threads":1,"nodes":1,"nx":1024,"ny":1024,"nz":1024,"px":1,"py":1,"pz":2,"pressure_unknowns":1073741824,"dt":2.5431315104166668e-05,"steps":1,"spinup":0,"loop_s":20764.020881229,"poisson_s":20627.529652533001,"spinup_s":3.77e-07,"output_s":1.6899999999999999e-07,"halo_s":395.16926592000056,"reduction_s":633.71569064999733,"cg_solves":1,"cg_iterations":3535,"cg_max_iterations":3535,"max_relative_residual":9.8763050556805262e-09,"last_residual_rms":5.7959457108777043e-08,"rhs_mean_removed":0,"div_before_rms":0.00014924460197306686,"div_after_rms":1.4739852166192729e-12,"max_divergence":1.1591283271758512e-11,"pressure_mean":3.6801995697868721e-20,"mass_initial":0.0080630873685522634,"mass_final":0.0080630873685095337,"mass_abs_error":4.2729708660260712e-14,"c_min":2.9285541973753172e-34,"c_max":0.99995485057947819,"w_max":3.2721764866323298e-06,"error_rms":0,"error_max":0,"pigment_discrete_error":0}
