@@ -1,0 +1,2 @@
+layout,repetitions,ranks,threads,nodes,loop_s_median,poisson_s_median,spinup_s_median,end_to_end_s_median,cg_iterations_median,max_divergence_median,mass_abs_error_median,w_max_median,loop_s_min,loop_s_max
+32x1,1,32,1,1,2350.269381274,2339.824604178,4.02e-07,2369.287638957845,3535,1.156065998139666e-11,1.4967194150727892e-14,3.2721764866390154e-06,2350.269381274,2350.269381274

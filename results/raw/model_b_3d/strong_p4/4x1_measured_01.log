@@ -1,0 +1,42 @@
+COMMAND bash /nfs/home/svu/luwei.chen/model_b_big/mpi_vanda_big.sh -np 4 /nfs/home/svu/luwei.chen/model_b_big/build-1567815.stdct-mgmt-02/model_b_mpi --nx 1024 --ny 1024 --nz 1024 --lx 1.0 --ly 1.0 --lz 1.0 --steps 1 --spinup 0 --nu 0.001 --kappa 0.0001 --force 0.8 --tol 1e-08 --dt 0.0 --profile surface --decomp blocks --progress 100 --max-iter 10000
+Authorized users only. All activity may be monitored and reported.
+[CN-129:1649398] Rank 0 bound to package[0][core:0]
+[CN-129:1649398] Rank 1 bound to package[0][core:2]
+[CN-129:1649398] Rank 2 bound to package[0][core:4]
+[CN-129:1649398] Rank 3 bound to package[0][core:6]
+PROGRESS solve=1 iteration=100 solve_elapsed_s=297.977 residual_rms=7.07557
+PROGRESS solve=1 iteration=200 solve_elapsed_s=590.891 residual_rms=5.65458
+PROGRESS solve=1 iteration=300 solve_elapsed_s=883.848 residual_rms=4.21451
+PROGRESS solve=1 iteration=400 solve_elapsed_s=1184.51 residual_rms=3.06611
+PROGRESS solve=1 iteration=500 solve_elapsed_s=1498.42 residual_rms=2.17348
+PROGRESS solve=1 iteration=600 solve_elapsed_s=1806.18 residual_rms=1.5471
+PROGRESS solve=1 iteration=700 solve_elapsed_s=2099.05 residual_rms=1.09292
+PROGRESS solve=1 iteration=800 solve_elapsed_s=2391.9 residual_rms=0.770441
+PROGRESS solve=1 iteration=900 solve_elapsed_s=2684.74 residual_rms=0.182782
+PROGRESS solve=1 iteration=1000 solve_elapsed_s=2977.54 residual_rms=0.165424
+PROGRESS solve=1 iteration=1100 solve_elapsed_s=3270.37 residual_rms=0.134092
+PROGRESS solve=1 iteration=1200 solve_elapsed_s=3563.2 residual_rms=0.0869114
+PROGRESS solve=1 iteration=1300 solve_elapsed_s=3856 residual_rms=0.0605235
+PROGRESS solve=1 iteration=1400 solve_elapsed_s=4148.8 residual_rms=0.0384442
+PROGRESS solve=1 iteration=1500 solve_elapsed_s=4441.66 residual_rms=0.0264487
+PROGRESS solve=1 iteration=1600 solve_elapsed_s=4734.5 residual_rms=0.0167919
+PROGRESS solve=1 iteration=1700 solve_elapsed_s=5027.32 residual_rms=0.0105831
+PROGRESS solve=1 iteration=1800 solve_elapsed_s=5320.21 residual_rms=0.00844706
+PROGRESS solve=1 iteration=1900 solve_elapsed_s=5613.09 residual_rms=0.0044181
+PROGRESS solve=1 iteration=2000 solve_elapsed_s=5905.98 residual_rms=0.00256987
+PROGRESS solve=1 iteration=2100 solve_elapsed_s=6198.84 residual_rms=0.00153784
+PROGRESS solve=1 iteration=2200 solve_elapsed_s=6491.75 residual_rms=0.000858954
+PROGRESS solve=1 iteration=2300 solve_elapsed_s=6784.61 residual_rms=0.000467908
+PROGRESS solve=1 iteration=2400 solve_elapsed_s=7077.4 residual_rms=0.000244594
+PROGRESS solve=1 iteration=2500 solve_elapsed_s=7370.27 residual_rms=0.000130323
+PROGRESS solve=1 iteration=2600 solve_elapsed_s=7663.06 residual_rms=7.28552e-05
+PROGRESS solve=1 iteration=2700 solve_elapsed_s=7955.86 residual_rms=4.18368e-05
+PROGRESS solve=1 iteration=2800 solve_elapsed_s=8248.71 residual_rms=2.04069e-05
+PROGRESS solve=1 iteration=2900 solve_elapsed_s=8541.53 residual_rms=8.64571e-06
+PROGRESS solve=1 iteration=3000 solve_elapsed_s=8834.48 residual_rms=3.42731e-06
+PROGRESS solve=1 iteration=3100 solve_elapsed_s=9127.39 residual_rms=1.45495e-06
+PROGRESS solve=1 iteration=3200 solve_elapsed_s=9420.21 residual_rms=6.697e-07
+PROGRESS solve=1 iteration=3300 solve_elapsed_s=9713.05 residual_rms=3.2331e-07
+PROGRESS solve=1 iteration=3400 solve_elapsed_s=10005.9 residual_rms=1.4485e-07
+PROGRESS solve=1 iteration=3500 solve_elapsed_s=10298.7 residual_rms=7.1339e-08
+RESULT {"model":"B-pressure-projection","mode":"simulate","ranks":4,"threads":1,"nodes":1,"nx":1024,"ny":1024,"nz":1024,"px":1,"py":2,"pz":2,"pressure_unknowns":1073741824,"dt":2.5431315104166668e-05,"steps":1,"spinup":0,"loop_s":10472.814803821,"poisson_s":10403.843354077,"spinup_s":2.5100000000000001e-07,"output_s":1.2100000000000001e-07,"halo_s":239.01510985200025,"reduction_s":314.5015239069993,"cg_solves":1,"cg_iterations":3535,"cg_max_iterations":3535,"max_relative_residual":9.8762284249537133e-09,"last_residual_rms":5.7959007398553329e-08,"rhs_mean_removed":0,"div_before_rms":0.00014924460197307055,"div_after_rms":1.4739737803971538e-12,"max_divergence":1.1585177248410981e-11,"pressure_mean":7.3755220044992595e-21,"mass_initial":0.0080630873705699914,"mass_final":0.0080630873705335136,"mass_abs_error":3.64777652528403e-14,"c_min":2.9285541973753172e-34,"c_max":0.99995485057947819,"w_max":3.2721764866523876e-06,"error_rms":0,"error_max":0,"pigment_discrete_error":0}

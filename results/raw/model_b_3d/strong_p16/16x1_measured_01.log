@@ -1,0 +1,54 @@
+COMMAND bash /nfs/home/svu/luwei.chen/model_b_big/mpi_vanda_big.sh -np 16 /nfs/home/svu/luwei.chen/model_b_big/build-1567814.stdct-mgmt-02/model_b_mpi --nx 1024 --ny 1024 --nz 1024 --lx 1.0 --ly 1.0 --lz 1.0 --steps 1 --spinup 0 --nu 0.001 --kappa 0.0001 --force 0.8 --tol 1e-08 --dt 0.0 --profile surface --decomp blocks --progress 100 --max-iter 10000
+Authorized users only. All activity may be monitored and reported.
+[CN-038:1006079] Rank 8 bound to package[0][core:16]
+[CN-038:1006079] Rank 2 bound to package[0][core:4]
+[CN-038:1006079] Rank 7 bound to package[0][core:14]
+[CN-038:1006079] Rank 0 bound to package[0][core:0]
+[CN-038:1006079] Rank 10 bound to package[0][core:20]
+[CN-038:1006079] Rank 9 bound to package[0][core:18]
+[CN-038:1006079] Rank 1 bound to package[0][core:2]
+[CN-038:1006079] Rank 3 bound to package[0][core:6]
+[CN-038:1006079] Rank 4 bound to package[0][core:8]
+[CN-038:1006079] Rank 6 bound to package[0][core:12]
+[CN-038:1006079] Rank 5 bound to package[0][core:10]
+[CN-038:1006079] Rank 11 bound to package[0][core:22]
+[CN-038:1006079] Rank 12 bound to package[0][core:24]
+[CN-038:1006079] Rank 13 bound to package[0][core:26]
+[CN-038:1006079] Rank 14 bound to package[0][core:28]
+[CN-038:1006079] Rank 15 bound to package[0][core:30]
+PROGRESS solve=1 iteration=100 solve_elapsed_s=92.2831 residual_rms=7.0804
+PROGRESS solve=1 iteration=200 solve_elapsed_s=183.014 residual_rms=5.65257
+PROGRESS solve=1 iteration=300 solve_elapsed_s=273.754 residual_rms=4.21405
+PROGRESS solve=1 iteration=400 solve_elapsed_s=366.135 residual_rms=3.06653
+PROGRESS solve=1 iteration=500 solve_elapsed_s=461.431 residual_rms=2.17347
+PROGRESS solve=1 iteration=600 solve_elapsed_s=555.383 residual_rms=1.54699
+PROGRESS solve=1 iteration=700 solve_elapsed_s=646.061 residual_rms=1.09291
+PROGRESS solve=1 iteration=800 solve_elapsed_s=736.745 residual_rms=0.770455
+PROGRESS solve=1 iteration=900 solve_elapsed_s=827.482 residual_rms=0.182945
+PROGRESS solve=1 iteration=1000 solve_elapsed_s=918.207 residual_rms=0.16545
+PROGRESS solve=1 iteration=1100 solve_elapsed_s=1008.92 residual_rms=0.13408
+PROGRESS solve=1 iteration=1200 solve_elapsed_s=1099.61 residual_rms=0.086939
+PROGRESS solve=1 iteration=1300 solve_elapsed_s=1190.29 residual_rms=0.0605222
+PROGRESS solve=1 iteration=1400 solve_elapsed_s=1280.97 residual_rms=0.0384488
+PROGRESS solve=1 iteration=1500 solve_elapsed_s=1371.65 residual_rms=0.0264517
+PROGRESS solve=1 iteration=1600 solve_elapsed_s=1462.35 residual_rms=0.0167888
+PROGRESS solve=1 iteration=1700 solve_elapsed_s=1553.03 residual_rms=0.0105843
+PROGRESS solve=1 iteration=1800 solve_elapsed_s=1643.72 residual_rms=0.00844679
+PROGRESS solve=1 iteration=1900 solve_elapsed_s=1734.41 residual_rms=0.00441734
+PROGRESS solve=1 iteration=2000 solve_elapsed_s=1825.1 residual_rms=0.00257015
+PROGRESS solve=1 iteration=2100 solve_elapsed_s=1915.79 residual_rms=0.00153784
+PROGRESS solve=1 iteration=2200 solve_elapsed_s=2006.46 residual_rms=0.000859008
+PROGRESS solve=1 iteration=2300 solve_elapsed_s=2097.12 residual_rms=0.000467948
+PROGRESS solve=1 iteration=2400 solve_elapsed_s=2187.77 residual_rms=0.000244597
+PROGRESS solve=1 iteration=2500 solve_elapsed_s=2278.42 residual_rms=0.000130333
+PROGRESS solve=1 iteration=2600 solve_elapsed_s=2369.1 residual_rms=7.28555e-05
+PROGRESS solve=1 iteration=2700 solve_elapsed_s=2459.75 residual_rms=4.18339e-05
+PROGRESS solve=1 iteration=2800 solve_elapsed_s=2550.41 residual_rms=2.0407e-05
+PROGRESS solve=1 iteration=2900 solve_elapsed_s=2641.08 residual_rms=8.64605e-06
+PROGRESS solve=1 iteration=3000 solve_elapsed_s=2731.75 residual_rms=3.4274e-06
+PROGRESS solve=1 iteration=3100 solve_elapsed_s=2822.42 residual_rms=1.45504e-06
+PROGRESS solve=1 iteration=3200 solve_elapsed_s=2913.07 residual_rms=6.69747e-07
+PROGRESS solve=1 iteration=3300 solve_elapsed_s=3003.73 residual_rms=3.23328e-07
+PROGRESS solve=1 iteration=3400 solve_elapsed_s=3094.42 residual_rms=1.44862e-07
+PROGRESS solve=1 iteration=3500 solve_elapsed_s=3185.06 residual_rms=7.13393e-08
+RESULT {"model":"B-pressure-projection","mode":"simulate","ranks":16,"threads":1,"nodes":1,"nx":1024,"ny":1024,"nz":1024,"px":2,"py":2,"pz":4,"pressure_unknowns":1073741824,"dt":2.5431315104166668e-05,"steps":1,"spinup":0,"loop_s":3235.074720093,"poisson_s":3217.5657197400001,"spinup_s":2.79e-07,"output_s":4.7599999999999997e-07,"halo_s":124.84299085400005,"reduction_s":171.88277101699964,"cg_solves":1,"cg_iterations":3535,"cg_max_iterations":3535,"max_relative_residual":9.8768989096042342e-09,"last_residual_rms":5.7962942162225585e-08,"rhs_mean_removed":0,"div_before_rms":0.00014924460197307104,"div_after_rms":1.4740738466099449e-12,"max_divergence":1.178261123651464e-11,"pressure_mean":3.343814369461777e-21,"mass_initial":0.0080630873723227039,"mass_final":0.0080630873723001144,"mass_abs_error":2.2589569104169982e-14,"c_min":2.9285541973753172e-34,"c_max":0.99995485057947819,"w_max":3.2721764866325102e-06,"error_rms":0,"error_max":0,"pigment_discrete_error":0}

@@ -1,0 +1,38 @@
+COMMAND bash /nfs/home/svu/luwei.chen/model_b_big/mpi_vanda_big.sh -np 1 /nfs/home/svu/luwei.chen/model_b_big/build-1567816.stdct-mgmt-02/model_b_mpi --nx 1024 --ny 1024 --nz 1024 --lx 1.0 --ly 1.0 --lz 1.0 --steps 1 --spinup 0 --nu 0.001 --kappa 0.0001 --force 0.8 --tol 1e-08 --dt 0.0 --profile surface --decomp blocks --progress 100 --max-iter 10000
+Authorized users only. All activity may be monitored and reported.
+[CN-033:1140591] Rank 0 bound to package[0][core:0]
+PROGRESS solve=1 iteration=100 solve_elapsed_s=1178.22 residual_rms=7.07589
+PROGRESS solve=1 iteration=200 solve_elapsed_s=2336.63 residual_rms=5.65411
+PROGRESS solve=1 iteration=300 solve_elapsed_s=3495.04 residual_rms=4.21435
+PROGRESS solve=1 iteration=400 solve_elapsed_s=4684.42 residual_rms=3.06622
+PROGRESS solve=1 iteration=500 solve_elapsed_s=5928.2 residual_rms=2.17348
+PROGRESS solve=1 iteration=600 solve_elapsed_s=7147.13 residual_rms=1.54706
+PROGRESS solve=1 iteration=700 solve_elapsed_s=8305.57 residual_rms=1.09291
+PROGRESS solve=1 iteration=800 solve_elapsed_s=9464.21 residual_rms=0.770444
+PROGRESS solve=1 iteration=900 solve_elapsed_s=10622.9 residual_rms=0.182798
+PROGRESS solve=1 iteration=1000 solve_elapsed_s=11781.6 residual_rms=0.165426
+PROGRESS solve=1 iteration=1100 solve_elapsed_s=12940.1 residual_rms=0.134092
+PROGRESS solve=1 iteration=1200 solve_elapsed_s=14098.9 residual_rms=0.0869121
+PROGRESS solve=1 iteration=1300 solve_elapsed_s=15257.4 residual_rms=0.0605235
+PROGRESS solve=1 iteration=1400 solve_elapsed_s=16415.9 residual_rms=0.0384443
+PROGRESS solve=1 iteration=1500 solve_elapsed_s=17574.5 residual_rms=0.0264489
+PROGRESS solve=1 iteration=1600 solve_elapsed_s=18733.1 residual_rms=0.0167915
+PROGRESS solve=1 iteration=1700 solve_elapsed_s=19891.8 residual_rms=0.0105832
+PROGRESS solve=1 iteration=1800 solve_elapsed_s=21050.2 residual_rms=0.00844705
+PROGRESS solve=1 iteration=1900 solve_elapsed_s=22208.7 residual_rms=0.00441803
+PROGRESS solve=1 iteration=2000 solve_elapsed_s=23367.2 residual_rms=0.00256992
+PROGRESS solve=1 iteration=2100 solve_elapsed_s=24525.8 residual_rms=0.00153785
+PROGRESS solve=1 iteration=2200 solve_elapsed_s=25684.3 residual_rms=0.000858963
+PROGRESS solve=1 iteration=2300 solve_elapsed_s=26842.8 residual_rms=0.000467912
+PROGRESS solve=1 iteration=2400 solve_elapsed_s=28001.3 residual_rms=0.000244595
+PROGRESS solve=1 iteration=2500 solve_elapsed_s=29159.8 residual_rms=0.000130322
+PROGRESS solve=1 iteration=2600 solve_elapsed_s=30318.3 residual_rms=7.28562e-05
+PROGRESS solve=1 iteration=2700 solve_elapsed_s=31476.8 residual_rms=4.18367e-05
+PROGRESS solve=1 iteration=2800 solve_elapsed_s=32635.3 residual_rms=2.04067e-05
+PROGRESS solve=1 iteration=2900 solve_elapsed_s=33793.9 residual_rms=8.64567e-06
+PROGRESS solve=1 iteration=3000 solve_elapsed_s=34952.5 residual_rms=3.42731e-06
+PROGRESS solve=1 iteration=3100 solve_elapsed_s=36111 residual_rms=1.45495e-06
+PROGRESS solve=1 iteration=3200 solve_elapsed_s=37269.8 residual_rms=6.69705e-07
+PROGRESS solve=1 iteration=3300 solve_elapsed_s=38428.5 residual_rms=3.23312e-07
+PROGRESS solve=1 iteration=3400 solve_elapsed_s=39587.3 residual_rms=1.44852e-07
+PROGRESS solve=1 iteration=3500 solve_elapsed_s=40745.7 residual_rms=7.1339e-08

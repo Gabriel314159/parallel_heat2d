@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N modelb-s2
+#PBS -q auto
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=12:00:00
+#PBS -j oe
+# Strong scaling of 1024^3: 4 and 2 ranks, one time step each.
+source "$PBS_O_WORKDIR/big_common.sh"
+gate
+point strong_p4 4 1024 1 0 1 14400
+point strong_p2 2 1024 1 0 1 27000
+echo "done: $RESULTS"
