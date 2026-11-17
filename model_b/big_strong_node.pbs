@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N modelb-s3
+#PBS -q auto
+#PBS -l select=1:ncpus=72:mpiprocs=72
+#PBS -l place=excl
+#PBS -l walltime=08:00:00
+#PBS -j oe
+# Strong scaling of 1024^3 on one node: 64, 32, 16 and 8 ranks, one time step each.
+source "$PBS_O_WORKDIR/big_common.sh"
+gate
+point strong_p64 64 1024 1 0 3 3600
+point strong_p32 32 1024 1 0 1 5400
+point strong_p16 16 1024 1 0 1 7200
+point strong_p8 8 1024 1 0 1 10800
+echo "done: $RESULTS"

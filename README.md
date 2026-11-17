@@ -126,6 +126,7 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 | --- | --- |
 | [src/](src/README.md) | C++ sources: shared components (`common/`), serial solver (`serial/`), MPI + OpenMP solver (`parallel/`). |
 | [tests/](tests/) | C++ unit tests, run by `ctest`. |
+| [model_b/](model_b/README.md) | Model B: a self-contained 3D solver (velocity, pressure projection, pigment) with its own build, checks and Vanda jobs. |
 | [scripts/](scripts/README.md) | Correctness checks, plotting and animation; planned benchmark tools. |
 | [config/defaults.json](config/defaults.json) | Default numerical and execution settings. |
 | [experiments/](experiments/README.md) | The correctness check and the five performance experiments, with the shared benchmark problem. |

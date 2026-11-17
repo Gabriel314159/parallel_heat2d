@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N modelb-check
+#PBS -P personal-sihan.wan
+#PBS -q auto
+#PBS -l select=1:ncpus=16:mpiprocs=8:ompthreads=2:mem=16gb
+#PBS -l walltime=00:30:00
+#PBS -j oe
+set -euo pipefail
+source "$PBS_O_WORKDIR/vanda_common.sh"
+export MODELB_VALIDATION=1 OMP_PROC_BIND=false
+python3 verify.py --build-dir "$BUILD" --output "$RESULTS/validation" \
+  --launcher "$LAUNCHER" > "$RESULTS/validation.log" 2>&1
+tail -1 "$RESULTS/validation.log"
+python3 run_model_b.py --suite smoke --build-dir "$BUILD" --output "$RESULTS/smoke" \
+  --launcher "$LAUNCHER" --layouts serial,4x2 --nx 32 --ny 32 --nz 16 --steps 100 \
+  > "$RESULTS/smoke.log" 2>&1
+tail -1 "$RESULTS/smoke.log"
+echo "Model B validation and coupled 100-step run PASSED: $RESULTS"

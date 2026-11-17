@@ -605,3 +605,31 @@ the $1024^2$ runs of 3 and 8 November differ by less than 1\% (31.80 against
 - **Section 4.2 has two hard-coded references**, "Section 2.3" and "Equation (12)". Replace them with `\ref` to your labels.
 - **Section 5.3.8 (3D)** still says "experiments 1, 4 and 5" and "problem $P$", which now match the names used in 5.2 and 5.3.
 - **Sections 6.6 to 6.8** keep their analysis text. Only their opening setup paragraphs changed.
+
+---
+
+## Section 3.4: Figure of the 3D pigment (new)
+
+The figure is `results/figures/domain_3d.pdf`, from `scripts/plot_domain_3d.py`. It is a run of the 3D pigment model on a $128\times128\times8$ grid with the live flow of Figure 2 (same wind, viscosity, spin-up and times $\tau$), so it shows both advection and diffusion. It is not a run of $P_3$, whose flow is frozen at rest, so its pigment would only diffuse. The fields are in `outputs/flow3d`. Put the figure after the description of the 3D basin in Section 3.4.
+
+```latex
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{figures/domain_3d.pdf}
+\caption{The three-dimensional pigment in the wind-driven flow, on a
+$128\times128\times8$ grid in the basin $[0,l_x]\times[0,l_y]\times[0,l_z]$
+with $l_x=l_y=1$ and depth $l_z=0.0625$, drawn six times deeper than it is;
+the shaded top face is the surface $z=l_z$. The flow is that of
+Figure~\ref{fig:flow} ($F_0=0.8$, $\nu=0.004$, spin-up of 8 time units) and
+the pigment diffusivity is $\kappa=10^{-4}$. The concentration $c(x,y,z,t)$
+is shown as a cloud of points whose density follows $c$ and whose colour
+uses the scale of Figure~\ref{fig:flow}, at times $\tau$ after the release.
+(a) At the release, $c$ is a Gaussian blob of amplitude $A_0=1$ and width
+$\sigma=0.05$ centred at $(x_0,y_0,z_0)=(0.2,\,0.5,\,l_z/2)$; since
+$\sigma$ is close to the depth, it fills the water column. (b), (c) The flow
+carries the pigment around the two gyres in every layer alike, as in the 2D
+run, while diffusion spreads it and makes it uniform over the depth. All six
+walls are no-flux, $\partial c/\partial n=0$ with $n$ the outward normal.}
+\label{fig:p3_domain_3d}
+\end{figure}
+```

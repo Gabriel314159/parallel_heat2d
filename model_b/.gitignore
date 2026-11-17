@@ -1,0 +1,8 @@
+build*/
+results/
+validation*/
+__pycache__/
+*.log
+*.o[0-9]*
+*.e[0-9]*
+.DS_Store

@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -N modelb-run
+#PBS -P personal-sihan.wan
+#PBS -q auto
+#PBS -l select=1:ncpus=32:mpiprocs=4:ompthreads=8:mem=32gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+# Modest complete-model run, not the original independent Poisson benchmark.
+set -euo pipefail
+source "$PBS_O_WORKDIR/vanda_common.sh"
+export MODELB_VALIDATION=1 OMP_PROC_BIND=false
+python3 verify.py --build-dir "$BUILD" --output "$RESULTS/validation" \
+  --launcher "$LAUNCHER" > "$RESULTS/validation.log" 2>&1
+tail -1 "$RESULTS/validation.log"
+export MODELB_VALIDATION=0 OMP_PROC_BIND=close
+python3 run_model_b.py --suite benchmark --build-dir "$BUILD" --output "$RESULTS/model_b" \
+  --launcher "$LAUNCHER" --layouts 4x8 --nx 64 --ny 64 --nz 32 \
+  --steps 100 --spinup 0 --warmups 1 --repeats 3 \
+  > "$RESULTS/model_b.log" 2>&1
+tail -1 "$RESULTS/model_b.log"
+echo "Model B run PASSED: $RESULTS/model_b/summary.csv"
