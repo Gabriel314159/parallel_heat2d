@@ -12,7 +12,7 @@ These blocks replace everything about the old 3D extension (Model A, the pigment
 | `tab:strong-3d`, `fig:strong-3d` | the 3D strong-scaling table and figure in 6.9 |
 | `fig:domain`, `fig:flow` | your Figures 1 and 3 (the 2D ones); match these to your labels |
 
-Figure numbers after the change: Figure 1 the 2D domain, Figure 2 the 3D domain, Figure 3 the 2D flow evolution, Figure 4 the 3D evolution.
+Figure numbers after the change: Figure 1 the 2D domain (redrawn as one panel), Figure 2 the 3D domain, Figure 3 the 2D flow evolution, Figure 4 the 3D evolution.
 
 Files made for these edits:
 
@@ -39,10 +39,9 @@ and Section~\ref{sec:model3d} the three-dimensional model, whose flow is compute
 \subsection{Three-Dimensional Model with Pressure Projection}
 \label{sec:model3d}
 
-In three dimensions the streamfunction and the vorticity are no longer scalars, so the
-formulation of Section~2 does not carry over. We therefore solve the 3D model in the
-velocity $\mathbf{u}=(u,v,w)$ and a pressure $\phi$ (pressure divided by the constant
-density). In the basin $\Omega=[0,L_x]\times[0,L_y]\times[0,L_z]$,
+In 3D the streamfunction and vorticity are no longer scalars, so we solve for the velocity
+$\mathbf{u}=(u,v,w)$ and the pressure $\phi$ (divided by the constant density) in the basin
+$\Omega=[0,L_x]\times[0,L_y]\times[0,L_z]$:
 \begin{equation}
 \frac{\partial \mathbf{u}}{\partial t}+\nabla\cdot(\mathbf{u}\mathbf{u})
 =-\nabla\phi+\nu\nabla^2\mathbf{u}+\mathbf{f},\qquad
@@ -50,115 +49,111 @@ density). In the basin $\Omega=[0,L_x]\times[0,L_y]\times[0,L_z]$,
 \frac{\partial c}{\partial t}+\nabla\cdot(\mathbf{u}c)=\kappa\nabla^2 c .
 \label{eq:ns3d}
 \end{equation}
-The pigment is passive, as in 2D. All six walls are impermeable and free-slip: the normal
-velocity is zero and the tangential velocity has zero normal derivative; the pigment satisfies
-$\partial c/\partial n=0$, so its total mass is conserved. The wind pushes in $x$,
+The walls are impermeable and free-slip, the pigment is passive with $\partial c/\partial n=0$,
+and the wind pushes in $x$:
 \begin{equation}
 f_x=\frac{F_0}{k_y}\cos(k_y y)\,g(z),\qquad k_y=\frac{2\pi}{L_y},\qquad
-g(z)=\frac{4\,e^{-4(1-z/L_z)}}{1-e^{-4}},
+g(z)=\frac{4\,e^{-4(1-z/L_z)}}{1-e^{-4}} .
 \label{eq:wind3d}
 \end{equation}
-with $f_y=f_z=0$. Its curl, $-\partial f_x/\partial y=F_0\sin(k_y y)\,g(z)$, is the forcing of
-Section~2 weighted by the profile $g$, whose mean over the depth is one: the 2D wind,
-concentrated near the surface. Because the forcing changes with depth, the horizontal flow does too,
-and the pressure creates a vertical velocity that no force imposes directly.
-Figure~\ref{fig:domain-3d} summarizes the domain, the initial pigment and the forcing.
+Its curl is $F_0\sin(k_y y)\,g(z)$, the 2D forcing weighted by a profile of mean one that
+concentrates it near the surface (Figure~\ref{fig:domain-3d}). The flow therefore varies with
+depth, and the pressure creates a vertical velocity.
 
-The grid has $n_x\times n_y\times n_z$ cells. The pigment and $\phi$ live at the cell centres,
-and $u$, $v$, $w$ at the centres of the faces normal to $x$, $y$, $z$ (a staggered, or MAC,
-grid). One time step has four parts.
-\begin{enumerate}
-\item The pigment is updated with the current velocity, by the scheme of Section~3.1 with
-fluxes through the six faces of a cell, a seven-point stencil.
-\item A predicted velocity $\mathbf{u}^*$ is computed from the advection, viscosity and wind,
-with the Adams--Bashforth scheme of Section~3.1. It does not yet satisfy $\nabla\cdot\mathbf{u}=0$.
-\item The pressure solves
+The pigment and $\phi$ live at the cell centres and $u$, $v$, $w$ at the faces (a staggered
+grid). Each step updates the pigment with the scheme of Section~3.1, now with a seven-point
+stencil, predicts a velocity $\mathbf{u}^*$ with the Adams--Bashforth scheme, and projects it:
 \begin{equation}
-A\phi=b,\qquad A=-DG,\qquad b=-\frac{D\mathbf{u}^*}{\Delta t},\qquad
-\frac{\partial\phi}{\partial n}=0 \ \text{on}\ \partial\Omega,
+A\phi=-\frac{D\mathbf{u}^*}{\Delta t},\qquad A=-DG,\qquad
+\frac{\partial\phi}{\partial n}=0,\qquad
+\mathbf{u}^{n+1}=\mathbf{u}^*-\Delta t\,G\phi,
 \label{eq:projection}
 \end{equation}
-where $D$ and $G$ are the discrete divergence and gradient of the staggered grid, so that
-$-DG$ is the seven-point Laplacian.
-\item The velocity is corrected, $\mathbf{u}^{n+1}=\mathbf{u}^*-\Delta t\,G\phi$, which makes
-$D\mathbf{u}^{n+1}=0$ up to the tolerance of the solve.
-\end{enumerate}
+where $D$ and $G$ are the discrete divergence and gradient, so that $D\mathbf{u}^{n+1}=0$.
+This is the 3D Poisson problem of the project, solved by the CG of Section~3.2 with the
+seven-point Laplacian. Under the Neumann condition $A$ is singular, as constants lie in its
+null space, so we remove the mean of the right-hand side, which is zero in exact arithmetic,
+and keep $\phi$ at zero mean, where CG applies.
 
-Equation~\eqref{eq:projection} is the three-dimensional Poisson problem of this project. It is
-solved by the matrix-free CG of Section~3.2, with the seven-point stencil in place of the
-five-point one and the previous $\phi$ as the initial guess. One difference matters: with the
-Neumann condition, $A$ is singular, since adding a constant to $\phi$ does not change $A\phi$.
-A solution exists only if the mean of $b$ is zero, which holds because no fluid crosses the
-walls. We remove the mean of $b$, fix the mean of $\phi$ to zero, and run CG in the space of
-mean-zero vectors, where $A$ is positive definite. The stopping criterion is that of
-Equation~(20), with $b$ in place of $\zeta^{n+1}$.
-
-In parallel, the grid is split in all three directions into blocks (slabs and pencils are also
-available), and the process grid is chosen to minimize the area of the faces between blocks.
-Each block keeps one layer of halo cells on each of its six faces. In every CG iteration the
-search direction exchanges these six faces, instead of the four edges of 2D, and the two dot
-products need two global sums, as in 2D. The velocity halos are exchanged one direction after
-another, so that the cells along the edges of a block, which the momentum advection needs,
-arrive as well, as the corner cells do in 2D. Exchanges are blocking, and within a rank OpenMP
-threads share the loops. The model is a separate program, \texttt{model\_b}, with a serial build
-and an MPI + OpenMP build; it has no GPU version.
+In parallel, the grid is split into blocks in all three directions, with a one-cell halo on each
+face. A CG iteration thus exchanges six faces instead of four edges, and still needs two global
+sums. Exchanges are blocking, and threads share the loops within a rank as in 2D. The model is
+a separate program, \texttt{model\_b}, with no GPU version.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.6\linewidth]{figures/domain_b.pdf}
-\caption{Computational domain and initial conditions of the three-dimensional benchmark.
-(a) The basin $\Omega=[0,1]^3$, with the surface $z=1$ shaded, and the initial pigment
-concentration $c(x,y,z,0)$, drawn as a cloud of points whose density follows $c$ and coloured
-on the scale of Figure~\ref{fig:domain}. The pigment is a Gaussian blob of amplitude $A_0=1$
-and width $\sigma=0.08$ centred at $(x_0,y_0,z_0)=(0.3,\,0.5,\,0.5)$. On the walls
-$\partial\Omega$ the normal velocity $\mathbf{u}\cdot\mathbf{n}$ is zero, the tangential velocity
-has zero normal derivative (free slip) and the pigment flux $\partial c/\partial n$ is zero,
-where $\mathbf{n}$ is the outward normal. The flow starts from rest. The dotted curves show the two factors of the wind force
-$f_x=(F_0/k_y)\cos(k_y y)\,g(z)$ of Equation~\eqref{eq:wind3d}, each measured from a thin
-reference line: on the floor, $\cos(k_y y)$ against $y$, which changes sign with $y$ as the
-forcing of Figure~\ref{fig:domain} does, pushing towards $-x$ at mid-height and towards $+x$
-near the walls $y=0$ and $y=L_y$; on the back wall $x=0$, the depth profile $g(z)$, which
-concentrates the wind near the surface and whose mean over the depth is one.}
+\includegraphics[width=0.45\linewidth]{figures/domain_b.pdf}
+\caption{Domain and initial condition of the three-dimensional benchmark: the basin
+$\Omega=[0,1]^3$ (surface $z=1$ shaded) and the initial pigment $c(x,y,z,0)$, drawn as points
+whose density follows $c$, a Gaussian blob of amplitude $A_0=1$ and width $\sigma=0.08$ centred
+at $(x_0,y_0,z_0)=(0.3,0.5,0.5)$. The dotted curves are the two factors of the wind force
+$f_x=(F_0/k_y)\cos(k_y y)\,g(z)$: $\cos(k_y y)$ on the floor, about $x=0.5$, and the depth profile
+$g(z)$ on the wall $x=0$. All walls are impermeable and free-slip, with no pigment flux,
+$\partial c/\partial n=0$ for the outward normal $\mathbf{n}$; the flow starts from rest.}
 \label{fig:domain-3d}
 \end{figure}
 ```
 
 ---
 
-## 4.2 Flow and Pigment Evolution (add after the last paragraph, with the figure)
+## 4.2 Flow and Pigment Evolution (replace the whole subsection)
 
-The current Figure 2 (the 3D clouds) moves here. Its run uses the same wind, viscosity, spin-up and diffusivity as the 2D run, so the two figures can be read side by side.
+Both evolution figures sit here: your Figure 3 (2D, unchanged) and the 3D one (`domain_3d.pdf`, now Figure 4).
 
 ```latex
-The same check applies to the three-dimensional model. Figure~\ref{fig:flow-3d} shows a run on
-a $48\times48\times24$ grid in a basin of depth $L_z=0.5$, with the parameters of
-Figure~\ref{fig:flow} and the blob of Figure~\ref{fig:domain-3d}, centred at mid-depth. Seen from
-above, the pigment follows the path of the 2D run: the flow between the gyres carries it to the
-left wall, where it splits into two branches that turn along the top and bottom walls. The depth
-adds what the 2D model cannot show. Since the wind acts mostly near the surface, the flow there
-is faster: at the release point it moves left at 0.53 near the surface and at 0.14 near the
-floor. By $\tau=2.5$ the pigment near the surface has therefore already travelled along the
-walls and back towards the middle of the basin (its mean $x$ is 0.43 in the top layer), while
-near the floor it is still at the left wall (mean $x$ of 0.10). The pigment also sinks: where
-the surface current meets the left wall, the fluid has nowhere to go but down, and the vertical
-velocity this creates, up to 0.37 and imposed by no force, carries 74\% of the pigment into the
-lower half of the basin. By $\tau=10$ it has spread through the whole basin. Meanwhile the peak
-concentration falls from 0.96 at the release to 0.14 and then to 0.026, the total pigment stays
-the same to within a relative $2\times10^{-14}$, and the divergence of the velocity stays below
-$5\times10^{-12}$ after every projection.
+\subsection{Flow and Pigment Evolution}
+
+The checks of Section~4.1 compare numbers on small grids. Here we check that one full run
+behaves as the equations say it should, in 2D and in 3D. Both runs use $F_0=0.8$,
+$\nu=0.004$ and $\kappa=10^{-4}$, and a spin-up of 8 time units before the blob is released;
+$\tau$ is the time since the release.
+
+In 2D (Figure~\ref{fig:flow}, $128\times128$ cells), the wind changes sign at mid-height and
+drives two gyres of opposite sense, which both carry fluid to the left between them, where the
+blob sits. The pigment reaches the left wall, splits into one branch per gyre, and by
+$\tau=9.77$ has travelled around both. Its peak falls from 1 to 0.06 while its mass is constant
+to rounding: advection along the streamlines, diffusion across them, and no loss through the
+walls.
+
+In 3D (Figure~\ref{fig:flow-3d}, $48\times48\times24$ cells, depth 0.5), the pigment takes the
+same path seen from above, and the depth adds two effects. First, the wind acts near the
+surface, so the flow is faster there (0.53 against 0.14 near the floor, at the release point):
+by $\tau=2.5$ the upper pigment has already turned back along the walls, while the lower
+pigment is still at the left wall. Second, the surface current sinks where it meets the left
+wall, with a vertical velocity of up to 0.37, and carries 74\% of the pigment into the lower
+half. The mass is again conserved, to a relative $2\times10^{-14}$, and the divergence stays
+below $5\times10^{-12}$ after every projection.
+
+% Figure 3 (2D flow evolution): unchanged
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{figures/domain_3d.pdf}
-\caption{Wind-driven flow and pigment transport in the three-dimensional model, on a
-$48\times48\times24$ grid in the basin $[0,1]\times[0,1]\times[0,0.5]$, with $F_0=0.8$,
-$\nu=0.004$, $\kappa=10^{-4}$ and a spin-up of 8 time units. The pigment concentration $c$ is
-drawn as a cloud of points whose density follows $c$, on the colour scale of
-Figure~\ref{fig:flow}, at times $\tau$ after the release; the shaded top face is the surface.
-(a) The blob of Figure~\ref{fig:domain-3d}, centred at mid-depth $z=0.25$, at the release.
-(b) The pigment carried to the left wall and along the side walls, faster near the surface, and
-sinking at the left wall. (c) The pigment spread through the whole basin.}
+\caption{Flow and pigment in the three-dimensional model on a $48\times48\times24$ grid in
+$[0,1]\times[0,1]\times[0,0.5]$, with $F_0=0.8$, $\nu=0.004$, $\kappa=10^{-4}$ and a spin-up of
+8 time units. (a) Streamlines of the depth-averaged horizontal flow at the release, on the
+surface, with the blob of Figure~\ref{fig:domain-3d}. (b)--(d) Pigment concentration $c$ at times
+$\tau$ after the release, as points whose density follows $c$, on a common square-root colour
+scale.}
 \label{fig:flow-3d}
+\end{figure}
+```
+
+---
+
+## Figure 1 (replace the figure; the panel (b) is now inside the basin)
+
+```latex
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.45\linewidth]{figures/domain.pdf}
+\caption{Domain and initial condition of the fixed-size benchmark: the basin
+$\Omega=[0,1]^2$ and the pigment $c(x,y,0)$, a Gaussian blob of amplitude $A_0$ and width
+$\sigma$ centred at $(x_0,y_0)$, drawn as points whose density follows $c$. The dotted curve is
+the wind profile $\sin(2\pi y/L_y)$ of the forcing $F=F_0\sin(2\pi y/L_y)$, which changes sign at
+$y=L_y/2$. On the walls $\partial\Omega$, $\psi=\zeta=0$ (impermeable, free-slip) and
+$\partial c/\partial n=0$.}
+\label{fig:domain}
 \end{figure}
 ```
 

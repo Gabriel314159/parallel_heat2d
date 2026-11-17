@@ -17,10 +17,9 @@ ps.apply()
 ps.plt.rcParams.update({"axes.grid": False, "axes.spines.top": True, "axes.spines.right": True,
                         "mathtext.fontset": "cm"})
 fig = ps.plt.figure(figsize=(4.6, 4.5))
-note = {"fontsize": 10, "color": ps.INK}
 
 # (a) the cube and the blob
-ax = fig.add_axes([-0.04, -0.08, 1.04, 1.0], projection="3d", computed_zorder=False)
+ax = fig.add_axes([-0.06, -0.06, 1.08, 1.08], projection="3d", computed_zorder=False)
 for z in (0, L):
     ax.plot([0, L, L, 0, 0], [0, 0, L, L, 0], [z] * 5, color=ps.INK, linewidth=0.9)
 for x, y in ((0, 0), (L, 0), (L, L), (0, L)):
@@ -42,21 +41,20 @@ for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
     axis.set_major_formatter("{x:g}")
     axis.pane.set_visible(False)
     axis._axinfo["grid"]["color"] = ps.GRID
-ax.tick_params(labelsize=8, pad=0)
-ax.set_xlabel("$x$", labelpad=-4); ax.set_ylabel("$y$", labelpad=-4); ax.set_zlabel("$z$", labelpad=-4)
+ax.tick_params(labelsize=12, pad=1)
+ax.set_xlabel("$x$", fontsize=15, labelpad=2); ax.set_ylabel("$y$", fontsize=15, labelpad=2)
+ax.set_zlabel("$z$", fontsize=15, labelpad=2)
 ax.view_init(elev=22, azim=-60)
-fig.text(0.5, 0.95, r"$\mathbf{u}\cdot\mathbf{n}=0,\ \ \partial c/\partial n=0\ \ \mathrm{on}\ \partial\Omega$",
-         ha="center", **note)
 
 # the wind profiles drawn on the walls: cos(k_y y) on the floor (xy plane), g(z) on the back wall x = 0 (yz plane)
 s = np.linspace(0, L, 200)
-kw = {"color": ps.ORANGE, "linewidth": 1.4, "linestyle": ":"}
+kw = {"color": ps.BLUE, "linewidth": 1.4, "linestyle": ":"}
 ref = {"color": ps.MUTED, "linewidth": 0.6, "linestyle": "-", "alpha": 0.6}
 ax.plot(np.full_like(s, 0.5), s, 0 * s, **ref)
 ax.plot(0.5 + 0.3 * np.cos(2 * np.pi * s / L), s, 0 * s, **kw)
 g = 4 * np.exp(-4 * (1 - s / L)) / (1 - np.exp(-4))
 ax.plot(0 * s, np.full_like(s, 0.2 * 1), s, **ref)
 ax.plot(0 * s, 0.2 * g, s, **kw)
-ax.text(0.68, 0.3, 0, r"$\cos(k_y y)$", color=ps.ORANGE, fontsize=9)
-ax.text(0, 0.3, 0.4, r"$g(z)$", color=ps.ORANGE, fontsize=9)
+ax.text(0.1, 0.02, 0, r"$\cos(k_y y)$", color=ps.BLUE, fontsize=14)
+ax.text(0, 0.36, 0.62, r"$g(z)$", color=ps.BLUE, fontsize=14)
 ps.save(fig, "domain_b")
