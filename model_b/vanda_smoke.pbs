@@ -1,7 +1,6 @@
 #!/bin/bash
 #PBS -S /bin/bash
 #PBS -N modelb-check
-#PBS -P personal-sihan.wan
 #PBS -q auto
 #PBS -l select=1:ncpus=16:mpiprocs=8:ompthreads=2:mem=16gb
 #PBS -l walltime=00:30:00

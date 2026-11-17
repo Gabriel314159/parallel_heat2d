@@ -2,7 +2,7 @@
 # Sourced by the big_*.pbs jobs: modules, build, correctness gate, and one
 # function per kind of run. Every run has its own result folder under results/<job id>/.
 set -euo pipefail
-: "${PBS_O_WORKDIR:?Submit with qsub from the model_b_pressure_3d folder}"
+: "${PBS_O_WORKDIR:?Submit with qsub from the model_b folder}"
 : "${PBS_JOBID:?Missing PBS job ID}"
 cd "$PBS_O_WORKDIR"
 module purge

@@ -22,7 +22,7 @@ The login node is a virtual machine of another type than the compute nodes, and 
 - **Modules** (EasyBuild names): `GCC/14.3.0` with `OpenMPI/5.0.8-GCC-14.3.0`, `CMake/4.0.3-GCCcore-14.3.0`, `nvhpc/26.1` and `nvhpc-hpcx-cuda12/26.1` (NVIDIA's compilers, with HPC-X MPI), `CUDA/12.*`, `LLVM/20.1.7`, Intel compilers and Intel MPI.
 - **Storage:** home 40 GB; `/scratch/$USER` 500 GB, where files idle for 60 days are deleted.
 
-Do not assume that a generic `mpiexec` command or scheduler header is valid on either platform. The supplied [job_template.sh](job_template.sh) has no scheduler-specific directives or module names. Add verified directives before submitting it.
+Do not assume that a generic `mpiexec` command or scheduler header is valid on either platform; the job scripts in [jobs/](jobs) use the verified Vanda settings.
 
 ## Binding
 

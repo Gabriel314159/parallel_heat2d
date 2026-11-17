@@ -2,9 +2,7 @@
 
 This is a self-contained CPU implementation of the Model B proposed in the
 project's `docs/design_3d.md`. It solves **three-dimensional velocity, pressure
-projection and pigment transport together at every time step**. It can be placed
-beside the existing `final` repository without changing its Model A or standalone
-Poisson benchmark. It is an additional experiment, with separate result files.
+projection and pigment transport together at every time step**. It sits beside the 2D solvers, Model A and the standalone Poisson benchmark without changing them. It is an additional experiment, with separate result files.
 
 ## What is solved
 
@@ -129,7 +127,7 @@ There are no Python package dependencies. On macOS, `build.sh` finds an installe
 Homebrew libomp. On Vanda it uses the modules already used by this project.
 
 ```bash
-cd model_b_pressure_3d
+cd model_b
 bash build.sh
 python3 verify.py --output validation \
   --launcher 'mpirun --host localhost --oversubscribe --bind-to none'
@@ -163,17 +161,14 @@ change dt (which would invalidate the fixed-step AB coefficients).
 
 ## Run on Vanda
 
-Upload the zip, then run these commands **on Vanda**:
+From this folder in a checkout of the repository on Vanda:
 
 ```bash
-mkdir -p ~/model_b_test
-cd ~/model_b_test
-unzip ~/model_b_pressure_3d.zip
-cd model_b_pressure_3d
-qsub vanda_smoke.pbs
+cd model_b
+qsub -P <project> vanda_smoke.pbs
 ```
 
-Both scripts already use `#PBS -P personal-sihan.wan`. The smoke job requests
+`<project>` is your Vanda project (the scripts carry no `#PBS -P` line). The smoke job requests
 one node, 16 CPU cores, 16 GB, 30 minutes. It first runs the verification suite,
 then a 100-step serial/4-rank x 2-thread complete simulation on 32 x 32 x 16
 cells. It returns nonzero if compilation, any check or any simulation fails.
@@ -181,7 +176,7 @@ cells. It returns nonzero if compilation, any check or any simulation fails.
 After this job passes, a modest numerical experiment is available:
 
 ```bash
-qsub vanda_run.pbs
+qsub -P <project> vanda_run.pbs
 ```
 
 It requests one node, 32 CPU cores, 32 GB, one hour. It reruns the correctness
@@ -202,11 +197,10 @@ cat results/JOB_ID/smoke/summary.csv
 cat results/JOB_ID/model_b/summary.csv
 ```
 
-Download a result from a **Mac terminal**, not from the Vanda shell:
+Copy a result to your own computer from a terminal there:
 
 ```bash
-scp sihan.wan@vanda.nus.edu.sg:~/model_b_test/model_b_pressure_3d/results/JOB_ID/model_b/summary.csv \
-  "$HOME/Desktop/model-b-summary.csv"
+scp <user>@vanda.nus.edu.sg:<checkout>/model_b/results/JOB_ID/model_b/summary.csv .
 ```
 
 ## Outputs, timing and experimental interpretation

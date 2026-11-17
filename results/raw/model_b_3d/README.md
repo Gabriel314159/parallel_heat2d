@@ -1,6 +1,6 @@
 # Model B (3D flow with pressure projection), 1024^3 strong scaling
 
-Source: the Model B package (`model_b.cpp`, 3D MAC grid, AB3 predictor, Neumann pressure Poisson by CG at every step), in [model_b/](../../../model_b/README.md). Run on Vanda on 16-17 Nov 2026, one thread per rank, unit cube of 1024^3 cells, one time step from rest, CG tolerance 1e-8, `--map-by core` up to 32 ranks and 32 ranks per socket at 64. The files in `jobs/` are the scripts used. `validation_*.csv` are the 69 correctness checks each job passed before timing anything.
+Source: the Model B package (`model_b.cpp`, 3D MAC grid, AB3 predictor, Neumann pressure Poisson by CG at every step), in [model_b/](../../../model_b/README.md). Run on Vanda on 16-17 Nov 2026, one thread per rank, unit cube of 1024^3 cells, one time step from rest, CG tolerance 1e-8, `--map-by core` up to 32 ranks and 32 ranks per socket at 64. The job scripts used are in [model_b/](../../../model_b) (`big_*.pbs`, `big_common.sh`, `mpi_vanda_big.sh`, `check_multinode.py`). `validation_*.csv` are the 69 correctness checks each job passed before timing anything.
 
 | Ranks | Job | Time, s | Speedup | Efficiency | ms per CG it |
 | ---: | --- | ---: | ---: | ---: | ---: |

@@ -669,4 +669,3 @@ The project uses CPUs, a five-point stencil with first-order upwind advection, c
 The flow is implemented in the serial and the parallel solver, with the checks of `experiment_plan.md`. Still open:
 
 - The parameters of the wind-driven flow (the placeholder in "Model").
-- `report/report.md` (sections 1 and 4) still describes the old heat-only model and needs a matching update.

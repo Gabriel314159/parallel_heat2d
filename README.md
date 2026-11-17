@@ -154,7 +154,6 @@ HEAT2D_REPO=$PWD RANKS=16 nohup bash hpc/big_run.sh > outputs/run512.log 2>&1 &
 | [docs/experiment_plan.md](docs/experiment_plan.md) | Correctness checks and fair timing conventions. |
 | [docs/ai_usage.md](docs/ai_usage.md) | Record of AI assistance and subsequent verification. |
 | [docs/references.md](docs/references.md) | Technical references. |
-| [report/report.md](report/report.md) | Report outline; no experimental findings are claimed. |
 
 Solver output goes to `outputs/`, which Git ignores.
 
