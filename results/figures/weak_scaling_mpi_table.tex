@@ -1,22 +1,20 @@
 \begin{table}[!t]
 \centering
 \small
-\begin{tabular}{rrrrrrrrr}
+\begin{tabular}{rrrrrrrrrrr}
 \toprule
-Ranks $p$ & Grid & $T$ (s) & $E_w$ & $\bar k$ & $t_{\mathrm{it}}$ (ms) & $E_{w,\mathrm{it}}$ & sum (ms) & min sum (ms) \\
+Ranks $p$ & Grid & $T$ (s) & $T_{\mathrm{serial}}$ (s) & $S_s$ & $E_s$ & $\bar k$ & $t_{\mathrm{it}}$ (ms) & $E_{w,\mathrm{it}}$ & sum (ms) & min sum (ms) \\
 \midrule
-serial & $256^2$ & 3.88 & -- & -- & -- & -- & -- & -- \\
-\midrule
-1 & $256^2$ & 3.91 & 1.000 & 337 & 0.114 & 1.00 & 0.000 & 0.000 \\
-4 & $512^2$ & 8.65 & 0.453 & 687 & 0.125 & 0.91 & 0.008 & 0.005 \\
-9 & $768^2$ & 13.34 & 0.293 & 1038 & 0.128 & 0.90 & 0.012 & 0.006 \\
-16 & $1024^2$ & 18.32 & 0.214 & 1390 & 0.131 & 0.87 & 0.014 & 0.009 \\
-36 & $1536^2$ & 29.33 & 0.133 & 2095 & 0.140 & 0.82 & 0.021 & 0.009 \\
-64 & $2048^2$ & 47.77 & 0.082 & 2801 & 0.170 & 0.67 & 0.026 & 0.012 \\
-144 & $3072^2$ & 133.42 & 0.029 & 4216 & 0.316 & 0.36 & 0.182 & 0.123 \\
-256 & $4096^2$ & 228.30 & 0.017 & 5634 & 0.405 & 0.28 & 0.261 & 0.184 \\
+1 & $256^2$ & 3.91 & 3.88 & 1.0 & 0.99 & 337 & 0.114 & 1.00 & 0.000 & 0.000 \\
+4 & $512^2$ & 8.65 & 43.11 & 5.0 & 1.25 & 687 & 0.125 & 0.91 & 0.008 & 0.005 \\
+9 & $768^2$ & 13.34 & 145 & 10.9 & 1.21 & 1038 & 0.128 & 0.90 & 0.012 & 0.006 \\
+16 & $1024^2$ & 18.32 & 346 & 18.9 & 1.18 & 1390 & 0.131 & 0.87 & 0.014 & 0.009 \\
+36 & $1536^2$ & 29.33 & 1\,347 & 45.9 & 1.28 & 2095 & 0.140 & 0.82 & 0.021 & 0.009 \\
+64 & $2048^2$ & 47.77 & 3\,580 & 74.9 & 1.17 & 2801 & 0.170 & 0.67 & 0.026 & 0.012 \\
+144 & $3072^2$ & 133.42 & 12\,895 & 96.6 & 0.67 & 4216 & 0.316 & 0.36 & 0.182 & 0.123 \\
+256 & $4096^2$ & 228.30 & 31\,537 & 138.1 & 0.54 & 5634 & 0.405 & 0.28 & 0.261 & 0.184 \\
 \bottomrule
 \end{tabular}
-\caption{Experiment 5: weak scaling over MPI ranks, medians of five repetitions. $E_w=T(1)/T(p)$ and $E_{w,\mathrm{it}}=t_{\mathrm{it}}(1)/t_{\mathrm{it}}(p)$ are taken against the one-rank run. Sum is the time per CG iteration inside the global sums for the slowest rank and min sum for the fastest rank. Up to 64 ranks the runs are on one node; 144 ranks use three nodes and 256 ranks four.}
+\caption{Experiment 5: weak scaling over MPI ranks, medians of five repetitions. $T_{\mathrm{serial}}$ is the time of \texttt{heat\_serial} on the same grid (five repetitions up to $512^2$, three up to $2048^2$, one for $3072^2$ and $4096^2$), $S_s=T_{\mathrm{serial}}/T$ the scaled speedup and $E_s=S_s/p$. $E_{w,\mathrm{it}}=t_{\mathrm{it}}(1)/t_{\mathrm{it}}(p)$ is taken against the one-rank run. Sum is the time per CG iteration inside the global sums for the slowest rank and min sum for the fastest rank. Up to 64 ranks the runs are on one node; 144 ranks use three nodes and 256 ranks four.}
 \label{tab:weak-mpi}
 \end{table}
