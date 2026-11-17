@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rcrrrrrrr}
+\toprule
+Ranks $p$ & Process grid & $T$ (s) & $S$ & $E$ & $T_P/T$ (\%) & $t_{\mathrm{it}}$ (ms) & halo (ms) & sum (ms) \\
+\midrule
+1 & $1\times1\times1$ & 41151$^\dagger$ & 1.0 & 1.00 & -- & 11641 & -- & -- \\
+2 & $1\times1\times2$ & 20764 & 2.0 & 0.99 & 99.3 & 5835 & 111.8 & 179.3 \\
+4 & $1\times2\times2$ & 10473 & 3.9 & 0.98 & 99.3 & 2943 & 67.6 & 89.0 \\
+8 & $2\times2\times2$ & 5476 & 7.5 & 0.94 & 99.4 & 1539 & 50.9 & 47.1 \\
+16 & $2\times2\times4$ & 3235 & 12.7 & 0.80 & 99.5 & 910 & 35.3 & 48.6 \\
+32 & $2\times4\times4$ & 2350 & 17.5 & 0.55 & 99.6 & 662 & 24.6 & 21.7 \\
+64 & $4\times4\times4$ & 1173 & 35.1 & 0.55 & 99.5 & 330 & 15.4 & 13.8 \\
+\bottomrule
+\end{tabular}
+\caption{Strong scaling of the three-dimensional model over MPI ranks on the fixed problem $P_3$ ($1024^3$ cells, one time step, 3535 CG iterations), one thread per rank, on one node. $T$ is the loop time (the median of three repetitions at 64 ranks, a single run otherwise), and $S=T(1)/T$ and $E=S/p$ are taken against the run on one rank. $^\dagger$The one-rank run reached its time limit at CG iteration 3500; its time is the elapsed time at that point plus the remaining 35 iterations at the rate of the last 200. $T_P/T$ is the share of the pressure solve, and $t_{\mathrm{it}}$, halo and sum the time per CG iteration of the solve, of its halo exchanges and of its global sums.}
+\label{tab:strong-3d}
+\end{table}
